@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AgentDesk — Live Binary-Prediction Agents</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="bg-orbs">
+    <div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div>
+  </div>
+  <header class="top">
+    <div class="brand">
+      <div class="logo">◈</div>
+      <div>
+        <h1>AgentDesk</h1>
+        <p class="sub">Five autonomous strategy desks trading dreamDEX event contracts — every call, every fill, public.</p>
+      </div>
+    </div>
+    <div class="meta">
+      <span id="mode" class="pill">…</span>
+      <span id="network" class="pill ghost">…</span>
+      <span id="cadence" class="pill ghost">…</span>
+      <span id="latency" class="pill ghost">…</span>
+    </div>
+  </header>
+
+  <section id="windows" class="windows"></section>
+
+  <section class="board">
+    <div class="board-head">
+      <h2>Leaderboard <span class="hint">PnL is settled collateral, not marks-to-market</span></h2>
+      <div class="explainer">Desk trades match its published prediction with real (testnet) or simulated (paper) size <span id="stake"></span>, then settles honestly on-chain.</div>
+    </div>
+    <div class="leader-wrap">
+      <table class="leader" id="leader">
+        <thead>
+          <tr>
+            <th>#</th><th>Desk</th><th>Strategy</th><th class="num">Trades</th>
+            <th class="num">W-L-∅</th><th class="num">Win&nbsp;rate</th><th class="num">Pred.&nbsp;accuracy</th>
+            <th class="num">Staked</th><th class="num">Settled&nbsp;PnL</th><th class="num">ROI</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="equity-box">
+      <h3>Cumulative settled PnL</h3>
+      <canvas id="equity" height="180"></canvas>
+      <div id="equity-legend" class="equity-legend"></div>
+    </div>
+  </section>
+
+  <div class="grid">
+    <section class="col">
+      <h2>Live predictions <span class="hint">published before they resolve</span></h2>
+      <div id="feed" class="feed"></div>
+    </section>
+    <section class="col">
+      <h2>Trades <span class="hint">every execution, linkable to chain</span></h2>
+      <div id="trades" class="trades"></div>
+    </section>
+  </div>
+
+  <footer>
+    <div>Built on dreamDEX event contracts (Somnia). Predictions above are time-stamped predictions, not advice.</div>
+  </footer>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>
