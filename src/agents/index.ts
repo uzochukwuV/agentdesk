@@ -86,26 +86,27 @@ const momentum: Agent = {
         features: { ticks: s.length },
       };
     }
-    const ys = s.map((x) => x.p);
-    const { sd } = stats(ys);
-    if (sd === 0 || !isFinite(sd)) return { agentId: "momentum", probUp: 0.5, direction: "UP", confidence: 0, rationale: "zero variance", features: { sd } };
     const span = Math.max(1, s.length);
     const newest = s[0];
     const oldest = s[span - 1];
     const dt = newest.t - oldest.t;
-    const slope = (newest.p - oldest.p) / Math.max(1, dt);
-    // normalized: slope per sqrt(dt) in units of vol → z = slope*sqrt(dt)/sd
-    const z = (slope * Math.sqrt(Math.max(1, dt))) / sd;
+    // Per-tick increments (series is newest-first); z = total move vs random-walk expectation.
+    const rets: number[] = [];
+    for (let i = 0; i + 1 < s.length; i++) rets.push(s[i].p - s[i + 1].p);
+    const { sd: rsd } = stats(rets);
+    if (rsd === 0 || !isFinite(rsd)) return { agentId: "momentum", probUp: 0.5, direction: "UP", confidence: 0, rationale: "zero variance", features: { sd: rsd } };
+    const move = newest.p - oldest.p;
+    const z = move / (rsd * Math.sqrt(rets.length));
     const probUp = logistic(LOGISTIC_K * z);
     const direction = probUp >= 0.5 ? "UP" : "DOWN";
-    const confidence = Math.min(1, Math.abs(z) / 1.5);
+    const confidence = Math.min(1, Math.abs(z) / 2);
     return {
       agentId: "momentum",
       probUp,
       direction,
       confidence,
-      rationale: `${direction} — ${span} ticks over ${dt}s, slope z=${z.toFixed(2)} vs vol σ=${sd.toFixed(4)}`,
-      features: { slope, sd, z, ticks: span, dt },
+      rationale: `${direction} — ${span} ticks over ${dt}s, move z=${z.toFixed(2)} vs tick σ=${rsd.toFixed(4)}`,
+      features: { move, sd: rsd, z, ticks: span, dt },
     };
   },
 };
