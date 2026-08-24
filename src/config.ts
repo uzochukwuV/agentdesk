@@ -32,10 +32,16 @@ export const config = {
     (process.env.DREAMDEX_NETWORK === "mainnet"
       ? "wss://api.infra.mainnet.somnia.network/ws"
       : "wss://api.infra.testnet.somnia.network/ws"),
+  httpRpcUrl:
+    process.env.HTTP_RPC_URL ??
+    (process.env.DREAMDEX_NETWORK === "mainnet"
+      ? "https://api.infra.mainnet.somnia.network"
+      : "https://api.infra.testnet.somnia.network"),
 
-  // Trading mode. PAPER_TRADES=false + PRIVATE_KEY set => live testnet trading.
+  // Trading mode. PAPER_TRADES=false + per-agent wallets funded => live testnet trading.
   paperTrades: envBool(process.env.PAPER_TRADES, true),
-  privateKey: (process.env.PRIVATE_KEY ?? "").trim() as `0x${string}` | "",
+  // Extra safety: only actually submit live orders when explicitly enabled. Wallets still exist + balances show otherwise.
+  enableLiveTrading: envBool(process.env.ENABLE_LIVE_TRADING, false),
 
   // Markets to predict: assets + cadence of the binary windows (900s = 15m).
   assets: (process.env.ASSETS ?? "BTC,ETH")

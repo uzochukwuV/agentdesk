@@ -90,3 +90,20 @@ a { color: var(--link); text-decoration: none; }
 footer { margin-top: 30px; color: var(--muted); font-size: 11px; text-align: center; }
 .spin { display: inline-block; width: 11px; height: 11px; border: 2px solid #334; border-top-color: #7c9cff; border-radius: 50%; animation: s 0.8s linear infinite; margin-left: 6px; vertical-align: -1px; }
 @keyframes s { to { transform: rotate(360deg); } }
+
+/* per-desk view */
+.hidden { display: none; }
+a.back { font-size: 12px; color: var(--link); margin-right: 10px; }
+.wallet-box { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; background: #0e141a; border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; font-size: 13px; }
+.wallet-box .addr { font-family: ui-monospace, monospace; font-size: 12px; word-break: break-all; }
+.wallet-box .bal { display: flex; flex-direction: column; }
+.wallet-box .bal b { font-size: 16px; font-variant-numeric: tabular-nums; }
+.wallet-box .bal span { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+.copy-btn { background: var(--panel2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 3px 10px; font-size: 11px; cursor: pointer; }
+.copy-btn:hover { border-color: var(--link); }
+.desk-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-bottom: 6px; }
+.stat-card { background: #0e141a; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.stat-card b { display: block; font-size: 17px; font-variant-numeric: tabular-nums; }
+.stat-card span { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+.leader td .nm a { color: inherit; }
+.leader td .nm a:hover { color: var(--link); text-decoration: underline; }

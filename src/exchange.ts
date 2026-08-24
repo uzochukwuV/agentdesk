@@ -6,6 +6,7 @@ import {
   isBinaryMarket,
 } from "@somnia-chain/markets-sdk";
 import { somniaMainnet, somniaShannon } from "@somnia-chain/markets-sdk/chains";
+import { createPublicClient, http } from "viem";
 import { config } from "./config.js";
 import type { BookYes } from "./store.js";
 
@@ -29,10 +30,12 @@ export interface WindowMarket {
 export class Exchange {
   exchange: SomniaMarkets;
   private collateralDecimals: number;
+  // loose type: the SDK's chain typings disagree with viem's PublicClient generics
+  private publicClient: any;
 
   constructor(privateKey?: `0x${string}`) {
     const isMain = config.network === "mainnet";
-    const chain = isMain ? somniaMainnet : somniaShannon;
+    const chain = (isMain ? somniaMainnet : somniaShannon) as any;
     const addresses = isMain ? SOMNIA_MAINNET_ADDRESSES : SOMNIA_TESTNET_ADDRESSES;
     this.exchange = new SomniaMarkets({
       indexerUrl: config.indexerUrl,
@@ -43,6 +46,8 @@ export class Exchange {
       privateKey: privateKey || undefined,
     });
     this.collateralDecimals = isMain ? 18 : 6;
+    const rpcUrl = config.httpRpcUrl ?? (chain.rpcUrls?.default?.http?.[0] as string | undefined);
+    this.publicClient = createPublicClient({ chain, transport: http(rpcUrl) });
   }
 
   get walletAddress(): string | undefined {
@@ -60,6 +65,12 @@ export class Exchange {
     if (!token) return 0;
     const [bal] = await this.exchange.client.getBalances([{ token }], account as `0x${string}`);
     return Number(bal) / 10 ** this.collateralDecimals;
+  }
+
+  /** Native gas-token balance in human units (STT on testnet, SOMI on mainnet). */
+  async getNativeBalanceHuman(account: string): Promise<number> {
+    const bal = await this.publicClient.getBalance({ address: account as `0x${string}` });
+    return Number(bal) / 1e18;
   }
 
   /** All live binary windows for the configured cadence, gated on-chain, with headroom. */

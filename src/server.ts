@@ -3,12 +3,10 @@ import { AGENTS } from "./agents/index.js";
 import { config } from "./config.js";
 import { Engine } from "./engine.js";
 import { Store, type Trade, type Prediction } from "./store.js";
-import { resolveWallet } from "./wallet.js";
 import { join } from "node:path";
 
 const store = new Store(join(process.cwd(), config.dataDir));
-const wallet = !config.paperTrades ? resolveWallet() : null;
-const engine = new Engine(store, wallet?.privateKey);
+const engine = new Engine(store);
 
 interface AgentStats {
   id: string;
@@ -99,7 +97,34 @@ app.get("/api/stream", (req, res) => {
 });
 
 app.get("/api/status", (_req, res) => res.json(engine.status()));
-app.get("/api/agents", (_req, res) => res.json(AGENTS.map((a) => statsFor(a.id))));
+app.get("/api/agents", (_req, res) => {
+  const status = engine.status();
+  const wallets = new Map(status.wallets.map((w: any) => [w.agentId, w.address]));
+  const balances = status.balances as Record<string, any>;
+  res.json(
+    AGENTS.map((a) => ({
+      ...statsFor(a.id),
+      walletAddress: wallets.get(a.id) ?? null,
+      balance: balances[a.id] ?? null,
+    }))
+  );
+});
+app.get("/api/agents/:id", (req, res) => {
+  const id = String(req.params.id);
+  if (!AGENTS.some((a) => a.id === id)) return res.status(404).json({ error: "unknown agent" });
+  const status = engine.status();
+  const wallets = new Map(status.wallets.map((w: any) => [w.agentId, w.address]));
+  const balances = status.balances as Record<string, any>;
+  const limit = Math.min(Number(req.query.limit ?? 100), 1000);
+  res.json({
+    ...statsFor(id),
+    walletAddress: wallets.get(id) ?? null,
+    balance: balances[id] ?? null,
+    recentPredictions: store.listPredictions((p) => p.agentId === id).slice(0, limit),
+    recentTrades: store.listTrades((t) => t.agentId === id).slice(0, limit),
+    equity: store.listEquity().filter((e) => e.agentId === id),
+  });
+});
 app.get("/api/leaderboard", (_req, res) => {
   const stats = AGENTS.map((a) => statsFor(a.id));
   stats.sort((x, y) => y.pnl - x.pnl);

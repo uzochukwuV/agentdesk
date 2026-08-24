@@ -2,16 +2,26 @@ import { AGENTS, runPredictions, type AgentOutput, type SignalContext, type Tick
 import { config } from "./config.js";
 import { Exchange, type WindowMarket } from "./exchange.js";
 import { Store, type Prediction, type Trade, type EquityPoint } from "./store.js";
+import { resolveWallets, type WalletInfo } from "./wallets.js";
 
 export interface Broadcaster {
   onEvent(type: string, payload: unknown): void;
 }
 
+export interface AgentBalance {
+  address: string;
+  collateralHuman: number | null;
+  nativeHuman: number | null;
+  updatedAt: number;
+}
+
 export class Engine {
   private store: Store;
-  private exchange: Exchange;
+  private readExchange: Exchange;
+  private agentExchanges = new Map<string, Exchange>();
+  private wallets = new Map<string, WalletInfo>();
+  private balances = new Map<string, AgentBalance>();
   private live: boolean;
-  private wallet: string | null = null;
   private running = false;
   private ticks = new Map<string, Tick[]>(); // asset -> newest-first ticks
   private candleCache = new Map<string, { candles: Candle[]; fetchedAt: number }>();
@@ -21,10 +31,24 @@ export class Engine {
   private lastScan: { at: number; marketsScanned: number; error: string | null } = { at: 0, marketsScanned: 0, error: null };
   private lastEquityAt = 0;
 
-  constructor(store: Store, privateKey?: `0x${string}`) {
+  constructor(store: Store) {
     this.store = store;
-    this.live = !config.paperTrades && !!privateKey;
-    this.exchange = new Exchange(this.live ? privateKey : undefined);
+    // wallets exist whenever paper mode is off; actual on-chain orders only when ENABLE_LIVE_TRADING=true
+    const walletsOn = !config.paperTrades;
+    this.live = walletsOn && config.enableLiveTrading;
+    if (walletsOn) {
+      this.wallets = resolveWallets(AGENTS.map((a) => a.id));
+      for (const [id, w] of this.wallets) {
+        this.agentExchanges.set(id, new Exchange(w.privateKey));
+        console.log(`[engine] agent ${id} wallet: ${w.address}`);
+      }
+      if (!config.enableLiveTrading) console.log("[engine] wallets ready; ENABLE_LIVE_TRADING=false so orders are simulated until funded");
+    }
+    this.readExchange = new Exchange();
+  }
+
+  private agentExchange(agentId: string): Exchange | undefined {
+    return this.agentExchanges.get(agentId);
   }
 
   broadcast(cb: (b: Broadcaster) => void): void {
@@ -43,7 +67,8 @@ export class Engine {
     return {
       live: this.live,
       paper: !this.live,
-      wallet: this.wallet,
+      wallets: this.wallets.size ? [...this.wallets.values()].map((w) => ({ agentId: w.agentId, address: w.address })) : [],
+      balances: Object.fromEntries(this.balances),
       network: config.network,
       cadenceSec: config.cadenceSec,
       assets: config.assets,
@@ -59,14 +84,13 @@ export class Engine {
   async start(): Promise<void> {
     if (this.started) return;
     this.started = true;
-    this.wallet = this.exchange.walletAddress ?? null;
     // Watch prices.
-    const handle = await this.exchange.exchange.client.watchPrices(config.assets);
-    this.live ? console.log(`[engine] live mode, wallet ${this.wallet}`) : console.log("[engine] paper mode (no wallet or PAPER_TRADES)");
+    const handle = await this.readExchange.exchange.client.watchPrices(config.assets);
+    console.log(this.live ? `[engine] live mode (${this.wallets.size} independent wallets)` : "[engine] paper mode (simulated fills)");
     // Maintain tick buffers from the live store.
-    this.exchange.exchange.client.subscribePrices(() => {
+    this.readExchange.exchange.client.subscribePrices(() => {
       for (const asset of config.assets) {
-        const list = this.exchange.exchange.client.getLivePriceTicks(asset, { limit: 25 });
+        const list = this.readExchange.exchange.client.getLivePriceTicks(asset, { limit: 25 });
         if (!list.length) continue;
         let buf: Tick[] = [];
         for (const tick of list) buf.push({ t: tick.blockTimestamp, p: tick.price, e: Number(tick.raw?.ema ?? tick.ema) });
@@ -82,7 +106,7 @@ export class Engine {
     // Fill buffers from history so strategies have data immediately.
     for (const asset of config.assets) {
       try {
-        const hist = await this.exchange.exchange.client.fetchPriceHistory(asset, { limit: 1000 });
+        const hist = await this.readExchange.exchange.client.fetchPriceHistory(asset, { limit: 1000 });
         this.ticks.set(
           asset,
           hist.map((h) => ({ t: h.blockTimestamp, p: h.price, e: Number(h.raw?.ema ?? h.ema) }))
@@ -92,18 +116,8 @@ export class Engine {
         console.error(`[engine] failed to seed ${asset}`, e);
       }
     }
-    if (this.live && this.wallet && config.autoFaucet) {
-      try {
-        const bal = await this.exchange.getCollateralBalanceHuman(this.wallet);
-        if (bal < config.faucetWhenBelow) {
-          console.log(`[engine] collateral ${bal.toFixed(2)}, hitting faucet...`);
-          const tx = await this.exchange.faucet();
-          console.log(`[engine] faucet ok in ${tx}`);
-        }
-      } catch (e: any) {
-        console.error("[engine] faucet check failed", e.message);
-      }
-    }
+    if (this.live && config.autoFaucet) await this.faucetAll();
+    if (this.wallets.size) await this.refreshBalances();
     this.running = true;
     this.loop();
   }
@@ -132,7 +146,7 @@ export class Engine {
   private async scan(): Promise<void> {
     // 1. Refresh windows for all assets (one indexer sweep).
     let scanned = 0;
-    const wins = await this.exchange.findWindows(config.assets, config.cadenceSec);
+    const wins = await this.readExchange.findWindows(config.assets, config.cadenceSec);
     for (let i = 0; i < config.assets.length; i++) {
       const asset = config.assets[i];
       const win = wins[i];
@@ -154,22 +168,64 @@ export class Engine {
     this.lastScan.marketsScanned = scanned;
     // 3. Settle expired pending predictions.
     await this.settle();
-    // 4. Equity snapshots for all agents once a minute.
+    // 4. Refresh wallet balances (cheap on-chain reads).
+    if (!this.lastBalanceAt || Date.now() - this.lastBalanceAt > 20_000) {
+      await this.refreshBalances();
+      this.lastBalanceAt = Date.now();
+    }
+    // 5. Equity snapshots for all agents once a minute.
     if (Date.now() - this.lastEquityAt > 60_000) {
       this.lastEquityAt = Date.now();
       this.snapshotEquity();
     }
   }
 
+  private lastBalanceAt = 0;
+  private async refreshBalances(): Promise<void> {
+    if (!this.wallets.size) return;
+    await Promise.all(
+      [...this.wallets.values()].map(async (w) => {
+        let collateralHuman: number | null = null;
+        let nativeHuman: number | null = null;
+        try {
+          collateralHuman = await this.readExchange.getCollateralBalanceHuman(w.address);
+        } catch {}
+        try {
+          nativeHuman = await this.readExchange.getNativeBalanceHuman(w.address);
+        } catch {}
+        this.balances.set(w.agentId, { address: w.address, collateralHuman, nativeHuman, updatedAt: Date.now() });
+      })
+    );
+  }
+
+  private async faucetAll(): Promise<void> {
+    for (const [agentId, w] of this.wallets) {
+      const ex = this.agentExchanges.get(agentId);
+      if (!ex) continue;
+      try {
+        const bal = await ex.getCollateralBalanceHuman(w.address);
+        if (bal < config.faucetWhenBelow) {
+          console.log(`[engine] ${agentId} collateral ${bal.toFixed(2)} → faucet`);
+          const tx = await ex.faucet();
+          console.log(`[engine] ${agentId} faucet ok: ${tx}`);
+        } else {
+          console.log(`[engine] ${agentId} collateral: ${bal.toFixed(2)}`);
+        }
+      } catch (e: any) {
+        console.error(`[engine] ${agentId} faucet failed: ${e?.message}`);
+      }
+    }
+  }
+
   private async predictAll(win: WindowMarket): Promise<void> {
     const buf = this.ticks.get(win.asset) ?? [];
-    const book = await this.exchange.getYesBook(win.yesSymbol);
+    const book = await this.readExchange.getYesBook(win.yesSymbol);
     // Candles for window-open reference.
     let openPrice: number | null = null;
     const cache = this.candleCache.get(win.asset);
     if (!cache || Date.now() - cache.fetchedAt > 30 * 60_000) {
       try {
-        const cs = await this.exchange.exchange.client.fetchPriceCandles(win.asset, "M1", { limit: 2000 });
+        const cs = await this.readExchange.exchange.client.fetchPriceCandles(win.asset, "M1", { limit: 2000 });
         const candles = cs.map((c: any) => ({ t: c.bucketStart, o: c.open, h: c.high, l: c.low, c: c.close, n: c.count })) as Candle[];
         this.candleCache.set(win.asset, { candles, fetchedAt: Date.now() });
       } catch (e) {
@@ -245,7 +301,7 @@ export class Engine {
   private async execute(win: WindowMarket, p: Prediction): Promise<void> {
     if (p.decision === "trade") return;
     // Re-read book to trade against a current quote.
-    const book = await this.exchange.getYesBook(p.yesSymbol);
+    const book = await this.readExchange.getYesBook(p.yesSymbol);
     if (book.bid == null || book.ask == null) {
       p.decision = "skip";
       p.decisionReason = "no book liquidity";
@@ -279,17 +335,24 @@ export class Engine {
       redeemTxHash: null,
     };
     if (this.live) {
-      try {
-        // Cross the touch with small buffer, priced in YES terms.
-        const limitYesPrice = side === "YES" ? Math.min(0.999, book.ask + 0.02) : Math.max(0.001, book.bid - 0.02);
-        const res = await this.exchange.placeLiveTrade(win, side, contracts, limitYesPrice);
-        trade.txHash = res.txHash;
-        trade.contracts = res.filledQty;
-        trade.price = res.avgYesPrice;
-        trade.costCollateral = res.spentCollateral;
-      } catch (e: any) {
+      const ex = this.agentExchange(p.agentId);
+      const w = this.wallets.get(p.agentId);
+      if (!ex || !w) {
         trade.status = "failed";
-        trade.error = String(e?.message ?? e).slice(0, 300);
+        trade.error = "no agent wallet";
+      } else {
+        try {
+          // Cross the touch with small buffer, priced in YES terms.
+          const limitYesPrice = side === "YES" ? Math.min(0.999, book.ask + 0.02) : Math.max(0.001, book.bid - 0.02);
+          const res = await ex.placeLiveTrade(win, side, contracts, limitYesPrice);
+          trade.txHash = res.txHash;
+          trade.contracts = res.filledQty;
+          trade.price = res.avgYesPrice;
+          trade.costCollateral = res.spentCollateral;
+        } catch (e: any) {
+          trade.status = "failed";
+          trade.error = String(e?.message ?? e).slice(0, 300);
+        }
       }
     } else {
       // Paper: entry at the touch (YES ask for YES side; 1-bid for NO side).
@@ -309,7 +372,7 @@ export class Engine {
       if (p.expiry > Date.now() / 1000 - 5) continue;
       let oc: any = null;
       try {
-        oc = await this.exchange.getMarketOnchainSnapshot(p.marketId);
+        oc = await this.readExchange.getMarketOnchainSnapshot(p.marketId);
       } catch {
         continue; // retry next scan
       }
@@ -345,28 +408,31 @@ export class Engine {
         this.emit("trade", t);
       }
     }
-    // Live redemption proof for claimable positions.
-    if (this.live && this.wallet) {
-      try {
-        const claims = await this.exchange.claimable(this.wallet);
-        const settledIds = new Set(settledMarkets.map((s) => s.marketId));
-        for (const c of claims) {
-          if (!settledIds.has(c.marketId)) continue;
-          try {
-            const tx = await this.exchange.redeem({ marketId: c.marketId, outcomeIdx: c.outcomeIdx, amount: c.amount });
-            // Mark redeemTxHash on the matching trades.
-            const sideName = c.outcomeIdx === 0 ? "YES" : "NO";
-            for (const t of this.store.listTrades((x) => x.marketId === c.marketId && x.side === sideName && (x.status === "won" || x.status === "void"))) {
-              t.redeemTxHash = tx;
-              this.store.upsertTrade(t);
-              this.emit("trade", t);
+    // Live redemption proof per agent wallet for claimable positions.
+    if (this.live) {
+      const settledIds = new Set(settledMarkets.map((s) => s.marketId));
+      for (const [agentId, w] of this.wallets) {
+        const ex = this.agentExchanges.get(agentId);
+        if (!ex) continue;
+        try {
+          const claims = await ex.claimable(w.address);
+          for (const c of claims) {
+            if (!settledIds.has(c.marketId)) continue;
+            try {
+              const tx = await ex.redeem({ marketId: c.marketId, outcomeIdx: c.outcomeIdx, amount: c.amount });
+              const sideName = c.outcomeIdx === 0 ? "YES" : "NO";
+              for (const t of this.store.listTrades((x) => x.agentId === agentId && x.marketId === c.marketId && x.side === sideName && (x.status === "won" || x.status === "void"))) {
+                t.redeemTxHash = tx;
+                this.store.upsertTrade(t);
+                this.emit("trade", t);
+              }
+            } catch (e: any) {
+              console.error(`[engine] ${agentId} redeem failed ${c.marketId}:`, e?.message);
             }
-          } catch (e: any) {
-            console.error(`[engine] redeem failed ${c.marketId}:`, e?.message);
           }
+        } catch (e: any) {
+          console.error(`[engine] ${agentId} claimable scan failed`, e?.message);
         }
-      } catch (e: any) {
-        console.error("[engine] claimable scan failed", e?.message);
       }
     }
   }

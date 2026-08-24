@@ -28,39 +28,68 @@
 
   <section id="windows" class="windows"></section>
 
-  <section class="board">
-    <div class="board-head">
-      <h2>Leaderboard <span class="hint">PnL is settled collateral, not marks-to-market</span></h2>
-      <div class="explainer">Desk trades match its published prediction with real (testnet) or simulated (paper) size <span id="stake"></span>, then settles honestly on-chain.</div>
-    </div>
-    <div class="leader-wrap">
-      <table class="leader" id="leader">
-        <thead>
-          <tr>
-            <th>#</th><th>Desk</th><th>Strategy</th><th class="num">Trades</th>
-            <th class="num">W-L-∅</th><th class="num">Win&nbsp;rate</th><th class="num">Pred.&nbsp;accuracy</th>
-            <th class="num">Staked</th><th class="num">Settled&nbsp;PnL</th><th class="num">ROI</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    <div class="equity-box">
-      <h3>Cumulative settled PnL</h3>
-      <canvas id="equity" height="180"></canvas>
-      <div id="equity-legend" class="equity-legend"></div>
-    </div>
-  </section>
+  <!-- main view -->
+  <div id="main-view">
+    <section class="board">
+      <div class="board-head">
+        <h2>Leaderboard <span class="hint">PnL is settled collateral, not marks-to-market</span></h2>
+        <div class="explainer">Desk trades match its published prediction with real (testnet) or simulated (paper) size <span id="stake"></span>, then settles honestly on-chain. Click a desk for its wallet, balances and track record.</div>
+      </div>
+      <div class="leader-wrap">
+        <table class="leader" id="leader">
+          <thead>
+            <tr>
+              <th>#</th><th>Desk</th><th>Strategy</th><th class="num">Trades</th>
+              <th class="num">W-L-∅</th><th class="num">Win&nbsp;rate</th><th class="num">Pred.&nbsp;accuracy</th>
+              <th class="num">Staked</th><th class="num">Settled&nbsp;PnL</th><th class="num">ROI</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="equity-box">
+        <h3>Cumulative settled PnL</h3>
+        <canvas id="equity" height="180"></canvas>
+        <div id="equity-legend" class="equity-legend"></div>
+      </div>
+    </section>
 
-  <div class="grid">
-    <section class="col">
-      <h2>Live predictions <span class="hint">published before they resolve</span></h2>
-      <div id="feed" class="feed"></div>
+    <div class="grid">
+      <section class="col">
+        <h2>Live predictions <span class="hint">published before they resolve</span></h2>
+        <div id="feed" class="feed"></div>
+      </section>
+      <section class="col">
+        <h2>Trades <span class="hint">every execution, linkable to chain</span></h2>
+        <div id="trades" class="trades"></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- per-desk view -->
+  <div id="desk-view" class="hidden">
+    <section class="board desk-board">
+      <div class="board-head">
+        <h2><a href="#/" class="back">← all desks</a> <span id="desk-title"></span></h2>
+        <div id="desk-style" class="explainer"></div>
+      </div>
+      <div id="desk-wallet" class="wallet-box"></div>
+      <div id="desk-stats" class="desk-stats"></div>
+      <div class="equity-box">
+        <h3>Desk equity (settled PnL)</h3>
+        <canvas id="desk-equity" height="160"></canvas>
+      </div>
     </section>
-    <section class="col">
-      <h2>Trades <span class="hint">every execution, linkable to chain</span></h2>
-      <div id="trades" class="trades"></div>
-    </section>
+    <div class="grid">
+      <section class="col">
+        <h2>Desk predictions <span class="hint">published before they resolve</span></h2>
+        <div id="desk-feed" class="feed"></div>
+      </section>
+      <section class="col">
+        <h2>Desk trades <span class="hint">live ones link to the explorer</span></h2>
+        <div id="desk-trades" class="trades"></div>
+      </section>
+    </div>
   </div>
 
   <footer>

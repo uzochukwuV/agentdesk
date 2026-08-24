@@ -25,6 +25,90 @@ const countdown = (expiry) => {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
+let DESK = null;
+
+function route() {
+  const m = location.hash.match(/^#\/desk\/([a-z0-9]+)/i);
+  const id = m?.[1] ?? null;
+  document.getElementById("desk-view").classList.toggle("hidden", !id);
+  document.getElementById("main-view").classList.toggle("hidden", !!id);
+  if (id) renderDesk(id);
+}
+window.addEventListener("hashchange", route);
+
+async function renderDesk(id) {
+  let d = null;
+  try {
+    d = await fetch(`/api/agents/${id}`).then((r) => (r.ok ? r.json() : null));
+  } catch {}
+  if (!d) {
+    document.getElementById("desk-title").textContent = "unknown desk";
+    return;
+  }
+  const desk = (STATUS?.agents ?? []).find((a) => a.id === id);
+  $("#desk-title").innerHTML = `<span class="dot" style="background:${d.color}"></span> ${d.name} <span class="hint">${desk?.style ?? d.style ?? ""}</span>`;
+  $("#desk-style").textContent = desk?.description ?? d.description ?? "";
+
+  // wallet + balances
+  const wb = $("#desk-wallet");
+  if (d.walletAddress) {
+    const bal = d.balance ?? {};
+    const cHuman = bal.collateralHuman == null ? "–" : fmt(bal.collateralHuman, 2);
+    const nHuman = bal.nativeHuman == null ? "–" : fmt(bal.nativeHuman, 4);
+    wb.innerHTML = `
+      <div><span class="hint">desk wallet (on-chain, auditable)</span><br/>
+        <a class="addr" href="${explorerBase}address/${d.walletAddress}" target="_blank">${d.walletAddress}</a>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('${d.walletAddress}')">copy</button>
+      </div>
+      <div class="bal"><b>${cHuman}</b><span>tUSDC (testnet collateral)</span></div>
+      <div class="bal"><b>${nHuman}</b><span>STT gas</span></div>
+      <div class="bal"><b class="pnl ${d.pnl >= 0 ? "pos" : "neg"}">${fmt(d.pnl, 2)}</b><span>settled PnL</span></div>`;
+  } else {
+    wb.innerHTML = `<span class="hint">Paper mode — this desk trades simulated fills at real book prices. Set PAPER_TRADES=false for an on-chain wallet.</span>`;
+  }
+
+  // stat cards
+  const winRate = d.won + d.lost > 0 ? pct((d.won / (d.won + d.lost)) * 100) : "–";
+  $("#desk-stats").innerHTML = [
+    [d.trades, "trades"],
+    [`${d.won}-${d.lost}-${d.void}`, "won-lost-void"],
+    [winRate, "win rate"],
+    [pct(d.accuracyPct), "prediction accuracy"],
+    [fmt(d.stake, 2), "staked"],
+    [d.roiPct == null ? "–" : `${d.roiPct.toFixed(1)}%`, "ROI"],
+    [d.bestTradePnL == null ? "–" : fmt(d.bestTradePnL, 2), "best trade"],
+    [d.predictions, "predictions"],
+  ].map(([v, l]) => `<div class="stat-card"><b>${v}</b><span>${l}</span></div>`).join("");
+
+  // equity
+  drawEquity($("#desk-equity"), d.equity ?? [], d.color);
+
+  // predictions
+  $("#desk-feed").innerHTML = (d.recentPredictions ?? []).map((p) => `
+    <div class="pred">
+      <div class="row1">
+        <span class="dir ${p.direction}">${p.direction} on <b>${p.symbol}</b></span>
+        ${dirTag(p)}
+      </div>
+      <div class="row2">${p.rationale}</div>
+      <div class="kv">
+        <span>P(UP) <b>${fmt(p.probUp, 3)}</b></span>
+        <span>conf <b>${fmt(p.confidence * 100, 0)}%</b></span>
+        <span>YES ${fmt(p.bookYes?.bid, 3)}/${fmt(p.bookYes?.ask, 3)}</span>
+        <span>${ago(p.createdAt)} ago</span>
+      </div>
+    </div>`).join("") || `<div class="hint">no calls yet<span class="spin"></span></div>`;
+
+  // trades
+  $("#desk-trades").innerHTML = `<table><thead><tr><th>mode</th><th>market</th><th>side</th><th>qty</th><th>prc</th><th>status</th><th>pnl</th><th>tx</th></tr></thead><tbody>` +
+    (d.recentTrades ?? []).map((t) => {
+      const link = t.txHash ? `<a href="${explorerBase}tx/${t.txHash}" target="_blank">${t.txHash.slice(0, 10)}…</a>` : "";
+      const redeem = t.redeemTxHash ? ` <a href="${explorerBase}tx/${t.redeemTxHash}" target="_blank">[redeem]</a>` : "";
+      const pnlMsg = t.status === "open" ? "" : `<b class="pnl ${t.pnlCollateral >= 0 ? "pos" : "neg"}">${fmt(t.pnlCollateral, 2)}</b>${redeem}`;
+      return `<tr><td><span class="mode-${t.mode}">${t.mode.toUpperCase()}</span></td><td>${t.symbol.split("/")[0]}</td><td>${t.side}</td><td class="num">${fmt(t.contracts, 2)}</td><td class="num">${t.price == null ? "–" : fmt(t.price, 3)}</td><td>${t.error ? t.error : t.status.toUpperCase()}</td><td class="num">${pnlMsg}</td><td>${link}</td></tr>`;
+    }).join("") + `</tbody></table>`;
+}
+
 async function fetchAll() {
   const [status, active, leader, equity, preds, trades] = await Promise.all([
     fetch("/api/status").then((r) => r.json()),
@@ -47,6 +131,7 @@ async function fetchAll() {
   renderEquity();
   renderFeed();
   renderTrades();
+  route();
 }
 
 function renderHeader() {
@@ -103,7 +188,7 @@ function renderLeader() {
     const winRate = s.won + s.lost > 0 ? ((s.won / (s.won + s.lost)) * 100) : null;
     return `<tr class="${i === 0 ? "rank1" : ""}">
       <td>${i + 1}</td>
-      <td><div class="desk"><span class="dot" style="background:${s.color}"></span><span class="nm">${s.name}</span></div></td>
+      <td><div class="desk"><span class="dot" style="background:${s.color}"></span><span class="nm"><a href="#/desk/${s.id}">${s.name}</a></span></div></td>
       <td title="${s.description.replace(/"/g, "&quot;")}"><span class="sty">${s.style}</span></td>
       <td class="num">${s.trades}</td>
       <td class="num">${s.won}-${s.lost}-${s.void}</td>
@@ -121,17 +206,50 @@ function renderEquityLegend() {
   $("#equity-legend").innerHTML = LEADER.map((s) => `<span><span class="dot" style="background:${s.color}"></span> ${s.name} (${fmt(s.pnl, 2)})</span>`).join("");
 }
 
-function renderEquity() {
-  const canvas = $("#equity");
+function drawEquity(canvas, points, color) {
   const ctx = canvas.getContext("2d");
   const dpr = window.devicePixelRatio || 1;
   const w = canvas.clientWidth;
-  const h = 180;
+  const h = Number(canvas.getAttribute("height") || 180);
   canvas.width = w * dpr;
   canvas.height = h * dpr;
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, w, h);
+  if (!points.length) {
+    ctx.fillStyle = "#5b6b7c";
+    ctx.font = "12px system-ui";
+    ctx.fillText("No settled history yet.", 14, 24);
+    return;
+  }
+  const minT = Math.min(...points.map((p) => p.t));
+  const maxT = Math.max(...points.map((p) => p.t));
+  let minY = Math.min(0, ...points.map((p) => p.realizedPnl));
+  let maxY = Math.max(0, ...points.map((p) => p.realizedPnl));
+  if (maxY - minY < 1) maxY = minY + 1;
+  const pad = { l: 44, r: 8, t: 8, b: 18 };
+  const X = (t) => pad.l + ((t - minT) / Math.max(1, maxT - minT)) * (w - pad.l - pad.r);
+  const Y = (y) => pad.t + (1 - (y - minY) / (maxY - minY)) * (h - pad.t - pad.b);
+  ctx.strokeStyle = "#26323f";
+  ctx.beginPath(); ctx.moveTo(0, Y(0)); ctx.lineTo(w, Y(0)); ctx.stroke();
+  ctx.fillStyle = "#5b6b7c";
+  ctx.font = "10px system-ui";
+  ctx.fillText("0", 4, Y(0) + 3);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  points.forEach((p, idx) => (idx === 0 ? ctx.moveTo(X(p.t), Y(p.realizedPnl)) : ctx.lineTo(X(p.t), Y(p.realizedPnl))));
+  ctx.stroke();
+}
+
+function renderEquity() {
+  const canvas = $("#equity");
+  const ctx = canvas.getContext("2d");
   if (!EQUITY.length) {
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth;
+    canvas.width = w * dpr;
+    canvas.height = 180 * dpr;
+    ctx.scale(dpr, dpr);
     ctx.fillStyle = "#5b6b7c";
     ctx.font = "12px system-ui";
     ctx.fillText("Waiting for the first settled trades… equity builds per desk, in settled collateral.", 14, 24);
@@ -142,15 +260,22 @@ function renderEquity() {
     if (!byAgent.has(p.agentId)) byAgent.set(p.agentId, []);
     byAgent.get(p.agentId).push(p);
   }
+  // Use shared scale across desks: draw background grid once, then each desk line on the same axes.
   const allT = EQUITY.map((p) => p.t);
   const minT = Math.min(...allT), maxT = Math.max(...allT);
   const allY = EQUITY.map((p) => p.realizedPnl);
   let minY = Math.min(0, ...allY), maxY = Math.max(0, ...allY);
   if (maxY - minY < 1) { maxY = minY + 1; }
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth;
+  const h = 180;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
   const pad = { l: 44, r: 8, t: 8, b: 18 };
   const X = (t) => pad.l + ((t - minT) / Math.max(1, maxT - minT)) * (w - pad.l - pad.r);
   const Y = (y) => pad.t + (1 - (y - minY) / (maxY - minY)) * (h - pad.t - pad.b);
-  // zero line
   ctx.strokeStyle = "#26323f";
   ctx.beginPath(); ctx.moveTo(0, Y(0)); ctx.lineTo(w, Y(0)); ctx.stroke();
   ctx.fillStyle = "#5b6b7c";
