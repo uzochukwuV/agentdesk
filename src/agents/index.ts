@@ -94,10 +94,11 @@ const momentum: Agent = {
     const oldest = s[span - 1];
     const dt = newest.t - oldest.t;
     const slope = (newest.p - oldest.p) / Math.max(1, dt);
-    const z = (slope * Math.sqrt(span)) / sd;
-    const probUp = logistic(LOGISTIC_K * (slope / sd) * Math.sqrt(span));
+    // normalized: slope per sqrt(dt) in units of vol → z = slope*sqrt(dt)/sd
+    const z = (slope * Math.sqrt(Math.max(1, dt))) / sd;
+    const probUp = logistic(LOGISTIC_K * z);
     const direction = probUp >= 0.5 ? "UP" : "DOWN";
-    const confidence = Math.min(1, Math.abs(z) / 2);
+    const confidence = Math.min(1, Math.abs(z) / 1.5);
     return {
       agentId: "momentum",
       probUp,
@@ -122,13 +123,20 @@ const meanrev: Agent = {
     if (s.length < 5) {
       return { agentId: "meanrev", probUp: 0.5, direction: "UP", confidence: 0, rationale: "insufficient ticks", features: { ticks: s.length } };
     }
-    const deviations = s.map((t) => (t.e !== 0 ? (t.p - t.e) / Math.max(t.e, 1e-9) : 0));
-    const { mean, sd } = stats(deviations);
-    if (sd === 0 || !isFinite(sd)) return { agentId: "meanrev", probUp: 0.5, direction: "UP", confidence: 0, rationale: "flat feed", features: { sd } };
+    let deviations = s.map((t) => (t.e !== 0 ? (t.p - t.e) / Math.max(t.e, 1e-9) : 0));
+    let { mean, sd } = stats(deviations);
+    if (sd === 0 || !isFinite(sd)) {
+      // Venue EMA tracks spot exactly — fall back to spot vs its own rolling mean.
+      const closes = s.map((t) => t.p);
+      const m = closes.reduce((a, b) => a + b, 0) / closes.length;
+      deviations = closes.map((p) => (p - m) / Math.max(m, 1e-9));
+      ({ mean, sd } = stats(deviations));
+      if (sd === 0 || !isFinite(sd)) return { agentId: "meanrev", probUp: 0.5, direction: "UP", confidence: 0, rationale: "flat feed", features: { sd } };
+    }
     const z = (mean - 0) / sd;
     const probUp = logistic(-LOGISTIC_K * z * 0.8);
     const direction = probUp >= 0.5 ? "UP" : "DOWN";
-    const confidence = Math.min(1, Math.abs(z) / 2.5);
+    const confidence = Math.min(1, Math.abs(z) / 1.8);
     return {
       agentId: "meanrev",
       probUp,
@@ -164,8 +172,9 @@ const mispricing: Agent = {
     const ys = s.map((x) => x.p);
     const { sd } = stats(ys);
     const n = s.length;
-    const slope = sd > 0 ? ((s[0].p - s[n - 1].p) / Math.max(1, s[0].t - s[n - 1].t)) / sd : 0;
-    const fairUp = logistic(4 * slope);
+    const dt = Math.max(1, s[0].t - s[n - 1].t);
+    const slope = sd > 0 ? ((s[0].p - s[n - 1].p) / dt) / sd : 0;
+    const fairUp = logistic(4 * slope * Math.sqrt(dt));
     const implied = ctx.book.mid;
     const edge = fairUp - implied;
     const probUp = fairUp;
@@ -215,11 +224,13 @@ const breakout: Agent = {
     }
     const latest = recent[0];
     const oldest = recent[recent.length - 1];
-    const move = (latest.p - oldest.p) / Math.max(1, baseSd);
     const span = Math.max(1, latest.t - oldest.t);
+    // Recent move vs baseline vol over the same window length: recent window is 120s,
+    // so normalize the observed move against the baseline sigma for 120s.
+    const move = (latest.p - oldest.p) / Math.max(1e-9, baseSd * Math.sqrt(span / 600));
     const probUp = logistic(2 * move);
     const expansion = recentSd / baseSd;
-    const confidence = Math.min(1, Math.abs(move) / 2 + Math.min(0.5, expansion * 0.1));
+    const confidence = Math.min(1, Math.abs(move) / 1.8 + Math.min(0.5, expansion * 0.1));
     const direction = probUp >= 0.5 ? "UP" : "DOWN";
     return {
       agentId: "breakout",

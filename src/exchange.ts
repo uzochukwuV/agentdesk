@@ -44,7 +44,10 @@ export class Exchange {
       addresses,
       priceFeed: isMain ? undefined : SOMNIA_TESTNET_PRICE_FEED,
       privateKey: privateKey || undefined,
-    });
+      // SDK default (60 gwei × 10M gas = 0.6 STT ceiling) exceeds a faucet-funded desk's
+      // balance; ~2× the observed ~6 gwei base fee still includes instantly on BFT.
+      fees: { maxFeePerGas: 12_000_000_000n, maxPriorityFeePerGas: 0n },
+    } as any);
     this.collateralDecimals = isMain ? 18 : 6;
     const rpcUrl = config.httpRpcUrl ?? (chain.rpcUrls?.default?.http?.[0] as string | undefined);
     this.publicClient = createPublicClient({ chain, transport: http(rpcUrl) });
@@ -125,7 +128,8 @@ export class Exchange {
         ask,
         mid: bid != null && ask != null ? (bid + ask) / 2 : bid ?? ask ?? null,
       };
-    } catch {
+    } catch (e: any) {
+      console.error(`[exchange] fetchOrderBook(${symbol}) failed:`, e?.shortMessage ?? e?.message ?? String(e));
       return { bid: null, ask: null, mid: null };
     }
   }
@@ -186,7 +190,8 @@ export class Exchange {
   }
 
   async faucet(): Promise<string> {
-    const res = await this.exchange.trader.faucet();
+    // SDK default gas is too low for this contract — pass explicit amount (10k tUSDC) + gas.
+    const res = await this.exchange.trader.faucet({ amount: 10000n * 10n ** 6n, gas: 300000n } as any);
     if (res.receipt?.status !== "success") throw new Error("faucet reverted");
     return res.receipt?.transactionHash ?? "unknown";
   }

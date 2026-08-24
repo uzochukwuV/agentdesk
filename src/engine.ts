@@ -4,6 +4,11 @@ import { Exchange, type WindowMarket } from "./exchange.js";
 import { Store, type Prediction, type Trade, type EquityPoint } from "./store.js";
 import { resolveWallets, type WalletInfo } from "./wallets.js";
 
+// Feed EMA arrives as a 1e18 fixed-point raw value on some venues; bring it to spot scale.
+function normalizeEma(ema: number, price: number): number {
+  return price > 0 && ema / price > 1e6 ? ema / 1e18 : ema;
+}
+
 export interface Broadcaster {
   onEvent(type: string, payload: unknown): void;
 }
@@ -30,6 +35,7 @@ export class Engine {
   private started = false;
   private lastScan: { at: number; marketsScanned: number; error: string | null } = { at: 0, marketsScanned: 0, error: null };
   private lastEquityAt = 0;
+  private bookReady = new Set<string>();
 
   constructor(store: Store) {
     this.store = store;
@@ -93,7 +99,7 @@ export class Engine {
         const list = this.readExchange.exchange.client.getLivePriceTicks(asset, { limit: 25 });
         if (!list.length) continue;
         let buf: Tick[] = [];
-        for (const tick of list) buf.push({ t: tick.blockTimestamp, p: tick.price, e: Number(tick.raw?.ema ?? tick.ema) });
+        for (const tick of list) buf.push({ t: tick.blockTimestamp, p: tick.price, e: normalizeEma(Number(tick.raw?.ema ?? tick.ema), tick.price) });
         const existing = this.ticks.get(asset) ?? [];
         for (const t of existing) {
           if (!buf.some((b) => b.t === t.t)) buf.push(t);
@@ -109,7 +115,7 @@ export class Engine {
         const hist = await this.readExchange.exchange.client.fetchPriceHistory(asset, { limit: 1000 });
         this.ticks.set(
           asset,
-          hist.map((h) => ({ t: h.blockTimestamp, p: h.price, e: Number(h.raw?.ema ?? h.ema) }))
+          hist.map((h) => ({ t: h.blockTimestamp, p: h.price, e: normalizeEma(Number(h.raw?.ema ?? h.ema), h.price) }))
         );
         console.log(`[engine] seeded ${asset} with ${hist.length} ticks`);
       } catch (e) {
@@ -159,10 +165,23 @@ export class Engine {
       scanned++;
       this.windows.set(asset, win);
       // 2. If we haven't predicted for this window yet, do it now.
-      const already = AGENTS.length;
-      const existing = this.store.listPredictions((x) => x.marketId === win.marketId).length;
-      if (existing < already) {
+      const existing = this.store.listPredictions((x) => x.marketId === win.marketId);
+      if (existing.length < AGENTS.length) {
         await this.predictAll(win);
+      } else if (!this.bookReady.has(win.marketId)) {
+        // First pass may have run before the market maker quoted the book; retry once it appears.
+        const noBook = existing.some((x) => x.rationale === "no book" || x.decisionReason === "no book liquidity");
+        if (!noBook) {
+          this.bookReady.add(win.marketId);
+        } else {
+          const book = await this.readExchange.getYesBook(win.yesSymbol);
+          if (book.bid != null && book.ask != null) {
+            this.bookReady.add(win.marketId);
+            console.log(`[engine] ${win.asset} book quoted — re-running predictions`);
+            await this.predictAll(win);
+          }
+        }
+        if (this.bookReady.size > 200) this.bookReady.delete(this.bookReady.values().next().value!);
       }
     }
     this.lastScan.marketsScanned = scanned;
@@ -220,6 +239,7 @@ export class Engine {
   private async predictAll(win: WindowMarket): Promise<void> {
     const buf = this.ticks.get(win.asset) ?? [];
     const book = await this.readExchange.getYesBook(win.yesSymbol);
+    console.log(`[engine] ${win.asset} ${win.symbol} book YES bid=${book.bid} ask=${book.ask}`);
     // Candles for window-open reference.
     let openPrice: number | null = null;
     const cache = this.candleCache.get(win.asset);
