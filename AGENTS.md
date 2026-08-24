@@ -37,3 +37,31 @@ leaderboard by settled PnL.
 ## Validate after changes
 - `npx tsc --noEmit`, `npm run smoke`, let one full 15-minute window cycle to
   confirm settlement + redeem attribution in `data/state.json`.
+
+## Live-trading gotchas (learned 2026-08-24)
+- dreamDEX 15m windows open with an EMPTY order book; the market maker quotes
+  ~1-2 min later. Never lock in predictions at window open when the book is
+  null — engine re-runs predictions once the book appears (`bookReady` set).
+- Price-feed EMA (`tick.raw.ema`) arrives as 1e18 fixed point; normalize with
+  `normalizeEma()` before comparing to spot, else meanrev sees "flat feed".
+- SDK writes use a fixed 10M gas ceiling x 60 gwei maxFee = 0.6 STT envelope,
+  which exceeds faucet-funded balances and surfaces as the misleading
+  "approve reverted: Missing or invalid parameters". Override
+  `fees: { maxFeePerGas: 12 gwei }` in the SomniaMarkets config.
+- tUSDC faucet reverts with zero args; call with explicit amount + gas
+  (`trader.faucet({ amount, gas: 300000n })`).
+- viem/SDK type mismatch: cast readContract/sendTransaction args `as any` in
+  scripts; publicClient is typed `any` in exchange.ts.
+- IOC taker orders can revert `ImmediateOrCancelNoFill()` when the book moves —
+  expected; trade is marked failed, no retry.
+
+## Ops scripts
+- `scripts/seedGas.mts` split STT gas from one funded desk to all desks
+- `scripts/mintAll.mts` faucet 10k tUSDC to every desk wallet
+- `scripts/bookProbe.mts` inspect live order books for current windows
+- `scripts/smoke.mts` end-to-end API smoke test (npm run smoke)
+
+## Deploy
+Server on PORT=12000 maps to the work-1 runtime host. Run live:
+`PORT=12000 PAPER_TRADES=false ENABLE_LIVE_TRADING=true npx tsx src/server.ts`
+Repo: github.com/uzochukwuV/agentdesk (public).
