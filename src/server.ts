@@ -4,6 +4,11 @@ import { config } from "./config.js";
 import { Engine } from "./engine.js";
 import { Store, type Trade, type Prediction } from "./store.js";
 import { join } from "node:path";
+import WebSocket from "ws";
+
+// The markets SDK expects a browser-style global WebSocket. Node 20 does not
+// provide one, but the project already depends on ws for this runtime bridge.
+if (!("WebSocket" in globalThis)) Object.assign(globalThis, { WebSocket });
 
 const store = new Store(join(process.cwd(), config.dataDir));
 const engine = new Engine(store);

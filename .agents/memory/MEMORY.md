@@ -1,0 +1,1 @@
+- [Somnia SDK on Node 20](somnia-sdk-node20.md) — install a global WebSocket bridge before starting the price-feed client.
