@@ -3,6 +3,7 @@ import { config } from "./config.js";
 import { Exchange, type WindowMarket } from "./exchange.js";
 import { Store, type Prediction, type Trade, type EquityPoint } from "./store.js";
 import { resolveWallets, type WalletInfo } from "./wallets.js";
+import type { Address } from "viem";
 
 // Feed EMA arrives as a 1e18 fixed-point raw value on some venues; bring it to spot scale.
 function normalizeEma(ema: number, price: number): number {
@@ -84,6 +85,43 @@ export class Engine {
       windows: Object.fromEntries(this.windows),
       agents: AGENTS.map((a) => ({ id: a.id, name: a.name, style: a.style, description: a.description, color: a.color })),
       bufferSizes: Object.fromEntries([...this.ticks].map(([a, t]) => [a, t.length])),
+    };
+  }
+
+  /** Resolve an active market and prepare an unsigned user order for browser signing. */
+  async buildUserOrder(
+    marketId: string,
+    owner: Address,
+    side: "YES" | "NO",
+    contracts: number,
+    slippageBps = 200,
+  ) {
+    const win = [...this.windows.values()].find((candidate) => candidate?.marketId === marketId) ?? null;
+    if (!win || win.expiry <= Date.now() / 1000) throw new Error("market is no longer active");
+    if (contracts < 1 || contracts > 1000) throw new Error("contracts must be between 1 and 1,000");
+    if (!Number.isFinite(slippageBps) || slippageBps < 0 || slippageBps > 1000) {
+      throw new Error("slippage must be between 0 and 10%");
+    }
+    const book = await this.readExchange.getYesBook(win.yesSymbol);
+    if (book.bid == null || book.ask == null) throw new Error("market has no two-sided liquidity");
+    // YES buys cross the ask. NO buys are represented in YES-price terms and cross the bid.
+    const buffer = slippageBps / 10_000;
+    const limitYesPrice =
+      side === "YES"
+        ? Math.min(0.999, book.ask + buffer)
+        : Math.max(0.001, book.bid - buffer);
+    const built = await this.readExchange.buildUserOrder(win, owner, side, contracts, limitYesPrice);
+    return {
+      market: {
+        marketId: win.marketId,
+        symbol: win.symbol,
+        asset: win.asset,
+        expiry: win.expiry,
+        secondsLeft: win.secondsLeft,
+        yesSymbol: win.yesSymbol,
+      },
+      book,
+      ...built,
     };
   }
 

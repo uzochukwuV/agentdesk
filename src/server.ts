@@ -5,6 +5,7 @@ import { Engine } from "./engine.js";
 import { Store, type Trade, type Prediction } from "./store.js";
 import { join } from "node:path";
 import WebSocket from "ws";
+import { isAddress } from "viem";
 
 // The markets SDK expects a browser-style global WebSocket. Node 20 does not
 // provide one, but the project already depends on ws for this runtime bridge.
@@ -156,6 +157,24 @@ app.get("/api/active", (_req, res) => {
       : []
   );
   res.json(out);
+});
+
+app.post("/api/user/order/build", express.json(), async (req, res) => {
+  try {
+    const { marketId, owner, side, contracts, slippageBps } = req.body ?? {};
+    if (typeof marketId !== "string" || !isAddress(owner) || (side !== "YES" && side !== "NO")) {
+      return res.status(400).json({ error: "marketId, owner, and side are required" });
+    }
+    const qty = Number(contracts);
+    const slippage = slippageBps == null ? 200 : Number(slippageBps);
+    if (!Number.isFinite(qty) || !Number.isFinite(slippage)) {
+      return res.status(400).json({ error: "contracts and slippage must be numeric" });
+    }
+    const built = await engine.buildUserOrder(marketId, owner, side, qty, slippage);
+    res.json(built);
+  } catch (e: any) {
+    res.status(400).json({ error: String(e?.shortMessage ?? e?.message ?? e).slice(0, 300) });
+  }
 });
 
 app.get("/", (_req, res) => {

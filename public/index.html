@@ -3,99 +3,105 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AgentDesk — Live Binary-Prediction Agents</title>
+  <meta name="theme-color" content="#0a0b11" />
+  <title>AgentDesk — Copy the signal, keep the keys</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="bg-orbs">
-    <div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div>
-  </div>
-  <header class="top">
-    <div class="brand">
-      <div class="logo">◈</div>
-      <div>
-        <h1>AgentDesk</h1>
-        <p class="sub">Five autonomous strategy desks trading dreamDEX event contracts — every call, every fill, public.</p>
-      </div>
-    </div>
-    <div class="meta">
-      <span id="mode" class="pill">…</span>
-      <span id="network" class="pill ghost">…</span>
-      <span id="cadence" class="pill ghost">…</span>
-      <span id="latency" class="pill ghost">…</span>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+  <header class="topbar">
+    <a class="brand" href="#/">
+      <span class="brand-mark">AD</span>
+      <span><strong>AgentDesk</strong><small>signal intelligence for dreamDEX</small></span>
+    </a>
+    <nav class="nav-links" aria-label="Primary navigation">
+      <a href="#/">Markets</a>
+      <a href="#/activity">Activity</a>
+      <a href="#/desk/momentum">Desks</a>
+    </nav>
+    <div class="top-actions">
+      <span id="mode" class="status-pill">Connecting</span>
+      <button id="wallet-button" class="wallet-button">Connect wallet</button>
     </div>
   </header>
 
-  <section id="windows" class="windows"></section>
-
-  <!-- main view -->
-  <div id="main-view">
-    <section class="board">
-      <div class="board-head">
-        <h2>Leaderboard <span class="hint">PnL is settled collateral, not marks-to-market</span></h2>
-        <div class="explainer">Desk trades match its published prediction with real (testnet) or simulated (paper) size <span id="stake"></span>, then settles honestly on-chain. Click a desk for its wallet, balances and track record.</div>
+  <main class="shell">
+    <section class="hero">
+      <div class="hero-copy">
+        <div class="eyebrow"><span class="pulse"></span> Five autonomous desks · transparent by default</div>
+        <h1>Copy the signal.<br /><em>Keep the keys.</em></h1>
+        <p>See what the desks see, choose your risk, and sign every order from your own wallet on Somnia testnet.</p>
+        <div class="hero-actions">
+          <button class="primary-button" data-connect>Connect to copy trades <span>↗</span></button>
+          <a class="text-button" href="#leaderboard-section">Explore track records <span>↓</span></a>
+        </div>
       </div>
-      <div class="leader-wrap">
-        <table class="leader" id="leader">
-          <thead>
-            <tr>
-              <th>#</th><th>Desk</th><th>Strategy</th><th class="num">Trades</th>
-              <th class="num">W-L-∅</th><th class="num">Win&nbsp;rate</th><th class="num">Pred.&nbsp;accuracy</th>
-              <th class="num">Staked</th><th class="num">Settled&nbsp;PnL</th><th class="num">ROI</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <div class="equity-box">
-        <h3>Cumulative settled PnL</h3>
-        <canvas id="equity" height="180"></canvas>
-        <div id="equity-legend" class="equity-legend"></div>
+      <div class="hero-console">
+        <div class="console-top"><span>DESK NETWORK</span><span class="live-dot">LIVE TESTNET</span></div>
+        <div class="console-number">05</div>
+        <div class="console-label">independent strategies watching<br />BTC + ETH event contracts</div>
+        <div class="console-line"><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="console-bottom"><span>15m windows</span><span id="network">SOMNIA</span></div>
       </div>
     </section>
 
-    <div class="grid">
-      <section class="col">
-        <h2>Live predictions <span class="hint">published before they resolve</span></h2>
-        <div id="feed" class="feed"></div>
-      </section>
-      <section class="col">
-        <h2>Trades <span class="hint">every execution, linkable to chain</span></h2>
-        <div id="trades" class="trades"></div>
-      </section>
-    </div>
-  </div>
+    <section class="account-strip">
+      <div class="account-intro"><span class="wallet-icon">⌁</span><div><strong id="account-title">Your copy desk</strong><small id="account-subtitle">Connect a wallet to copy signals non-custodially</small></div></div>
+      <div class="account-metrics"><div><small>Following</small><b id="following-count">0 desks</b></div><div><small>Wallet</small><b id="wallet-short">Not connected</b></div><div><small>Chain</small><b>Somnia testnet</b></div></div>
+      <button class="quiet-button" data-connect id="strip-connect">Connect wallet</button>
+    </section>
 
-  <!-- per-desk view -->
-  <div id="desk-view" class="hidden">
-    <section class="board desk-board">
-      <div class="board-head">
-        <h2><a href="#/" class="back">← all desks</a> <span id="desk-title"></span></h2>
-        <div id="desk-style" class="explainer"></div>
-      </div>
+    <div id="main-view">
+      <section class="section-heading first-heading"><div><span class="section-kicker">01 / NOW</span><h2>Markets in motion</h2></div><span class="heading-note">Choose a desk call to inspect or copy</span></section>
+      <section id="windows" class="windows"></section>
+
+      <section class="section-heading" id="leaderboard-section"><div><span class="section-kicker">02 / DESKS</span><h2>Track record, not promises</h2></div><span class="heading-note">Settled on-chain · updated live</span></section>
+      <section class="desk-grid" id="desk-grid"></section>
+
+      <section class="activity-layout">
+        <section class="panel activity-panel"><div class="panel-heading"><div><span class="section-kicker">03 / SIGNAL FEED</span><h2>Every call, in public</h2></div><span class="tiny-live">STREAMING</span></div><div id="feed" class="feed"></div></section>
+        <section class="panel activity-panel"><div class="panel-heading"><div><span class="section-kicker">04 / EXECUTION</span><h2>Network activity</h2></div><span class="heading-note">Agent trades</span></div><div id="trades" class="trades"></div></section>
+      </section>
+
+      <section class="panel equity-panel"><div class="panel-heading"><div><span class="section-kicker">05 / PERFORMANCE</span><h2>Settled PnL</h2></div><span class="heading-note">Not marks-to-market</span></div><canvas id="equity" height="180"></canvas><div id="equity-legend" class="equity-legend"></div></section>
+    </div>
+
+    <div id="desk-view" class="hidden">
+      <section class="desk-hero panel"><a href="#/" class="back">← All desks</a><div class="desk-hero-main"><div><div id="desk-title" class="desk-title"></div><p id="desk-style"></p></div><div id="desk-follow"></div></div></section>
       <div id="desk-wallet" class="wallet-box"></div>
       <div id="desk-stats" class="desk-stats"></div>
-      <div class="equity-box">
-        <h3>Desk equity (settled PnL)</h3>
-        <canvas id="desk-equity" height="160"></canvas>
-      </div>
-    </section>
-    <div class="grid">
-      <section class="col">
-        <h2>Desk predictions <span class="hint">published before they resolve</span></h2>
-        <div id="desk-feed" class="feed"></div>
-      </section>
-      <section class="col">
-        <h2>Desk trades <span class="hint">live ones link to the explorer</span></h2>
-        <div id="desk-trades" class="trades"></div>
-      </section>
+      <section class="activity-layout"><section class="panel activity-panel"><div class="panel-heading"><h2>Desk predictions</h2><span class="heading-note">Published before resolution</span></div><div id="desk-feed" class="feed"></div></section><section class="panel activity-panel"><div class="panel-heading"><h2>Desk trades</h2><span class="heading-note">Explorer-linked</span></div><div id="desk-trades" class="trades"></div></section></div>
+      <section class="panel equity-panel"><div class="panel-heading"><h2>Desk equity</h2><span class="heading-note">Settled PnL</span></div><canvas id="desk-equity" height="160"></canvas></section>
     </div>
+  </main>
+
+  <div id="trade-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-trade></div>
+    <section class="trade-modal" role="dialog" aria-modal="true" aria-labelledby="trade-title">
+      <button class="modal-close" data-close-trade aria-label="Close trade ticket">×</button>
+      <span class="section-kicker">MANUAL COPY TICKET</span>
+      <h2 id="trade-title">Copy this signal</h2>
+      <p class="modal-copy">AgentDesk prepares the order. Your wallet reviews and signs it. We never receive your private key.</p>
+      <div id="trade-context" class="trade-context"></div>
+      <form id="trade-form">
+        <div class="side-switch"><button type="button" class="side-option active" data-side="YES">YES / UP</button><button type="button" class="side-option" data-side="NO">NO / DOWN</button></div>
+        <label class="field-label" for="trade-contracts">Contracts <span>1–1,000</span></label>
+        <div class="input-wrap"><input id="trade-contracts" type="number" min="1" max="1000" step="1" value="10" required /><span>contracts</span></div>
+        <label class="field-label" for="trade-slippage">Max slippage <span>protects against a moving book</span></label>
+        <div class="input-wrap"><input id="trade-slippage" type="number" min="0" max="10" step="0.1" value="2" required /><span>%</span></div>
+        <div id="trade-summary" class="trade-summary"></div>
+        <button id="submit-trade" class="primary-button full" type="submit">Prepare order <span>→</span></button>
+      </form>
+      <div id="trade-status" class="trade-status" aria-live="polite"></div>
+    </section>
   </div>
-
-  <footer>
-    <div>Built on dreamDEX event contracts (Somnia). Predictions above are time-stamped predictions, not advice.</div>
-  </footer>
-
+  <div id="toast" class="toast" role="status"></div>
+  <footer>AgentDesk is a non-custodial interface for Somnia testnet event contracts. Agent history is not a guarantee of future results.</footer>
   <script src="app.js" type="module"></script>
 </body>
 </html>

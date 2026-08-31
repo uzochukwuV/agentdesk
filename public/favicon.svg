@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="8" fill="#0a0b11"/>
+  <path d="M13 16h38v32H13z" fill="none" stroke="#c9f36a" stroke-width="3" transform="rotate(-8 32 32)"/>
+  <text x="32" y="37" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#c9f36a">AD</text>
+</svg>

@@ -6,7 +6,7 @@ import {
   isBinaryMarket,
 } from "@somnia-chain/markets-sdk";
 import { somniaMainnet, somniaShannon } from "@somnia-chain/markets-sdk/chains";
-import { createPublicClient, http } from "viem";
+import { createPublicClient, http, type Address } from "viem";
 import { config } from "./config.js";
 import type { BookYes } from "./store.js";
 
@@ -132,6 +132,56 @@ export class Exchange {
       console.error(`[exchange] fetchOrderBook(${symbol}) failed:`, e?.shortMessage ?? e?.message ?? String(e));
       return { bid: null, ask: null, mid: null };
     }
+  }
+
+  /** Build browser-wallet transactions without ever receiving a user private key. */
+  async buildUserOrder(
+    win: WindowMarket,
+    owner: Address,
+    side: "YES" | "NO",
+    contractsHuman: number,
+    limitYesPrice: number,
+  ) {
+    const scale = BigInt(10 ** this.collateralDecimals);
+    const tick = isMainTick(this.collateralDecimals);
+    const ticksToPrice = (p: number) => BigInt(Math.round(p * Number(scale / tick))) * tick;
+    const lotsToQty = (q: number) => BigInt(Math.floor(q * Number(scale / tick) + 1e-9)) * tick;
+    const priceRaw = ticksToPrice(limitYesPrice);
+    const qtyRaw = lotsToQty(contractsHuman);
+    if (qtyRaw === 0n || priceRaw === 0n) throw new Error("order rounds to zero on the lot grid");
+
+    const trader = this.exchange.client.createTrader({ account: owner });
+    const unsigned = await trader.buildPlaceOrder({
+      pool: win.pool,
+      side: side === "YES" ? "BUY_YES" : "BUY_NO",
+      price: priceRaw,
+      quantity: qtyRaw,
+      orderType: 2, // IOC: fill now or cancel the remainder.
+      expireTimestampNs: BigInt(Math.floor(Math.min(Date.now() / 1000 + 240, win.expiry))) * 1_000_000_000n,
+      outcomeToken: win.outcomeToken,
+      yesId: win.yesId,
+      noId: win.noId,
+      collateral: this.collateralToken,
+    });
+    const serializeCall = (call: any) =>
+      call
+        ? {
+            to: call.to,
+            data: call.data,
+            value: `0x${call.value.toString(16)}`,
+            description: call.description,
+          }
+        : null;
+    return {
+      order: serializeCall(unsigned.order),
+      approval: serializeCall(unsigned.approval),
+      side,
+      contracts: contractsHuman,
+      limitYesPrice,
+      collateralDecimals: this.collateralDecimals,
+      network: config.network,
+      chainId: config.network === "mainnet" ? 5031 : 50312,
+    };
   }
 
   getMarketOnchainSnapshot(marketId: string) {
