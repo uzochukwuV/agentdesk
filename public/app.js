@@ -156,8 +156,27 @@ function renderDeskCards() {
   return LEADER.map((s, i) => `<article class="desk-card"><div class="desk-top"><span class="desk-rank">0${i + 1}</span>${followButton(s.id)}</div><a href="#/app/agents/${esc(s.id)}" class="desk-name">${esc(s.name)}</a><div class="desk-style">${esc(s.style)}</div><div class="desk-stat"><div><small>settled PnL</small><b class="${s.pnl >= 0 ? "pnl-pos" : "pnl-neg"}">${fmt(s.pnl, 2)}</b></div><div><small>accuracy</small><b>${pct(s.accuracyPct)}</b></div></div><a href="#/app/agents/${esc(s.id)}" class="desk-link">Open profile ↗</a></article>`).join("");
 }
 function dirTag(p) { return p.status === "resolved" ? `<span class="tag ${p.outcome}">${p.outcome}</span>` : `<span class="tag">${p.decision === "trade" ? "traded" : "published"}</span>`; }
+function signalVerdict(p) {
+  if (p.status === "resolved") {
+    return p.outcome === "WIN" ? { label: "WON", className: "winning" } : p.outcome === "LOSS" ? { label: "LOST", className: "losing" } : { label: "VOID", className: "waiting" };
+  }
+  const row = WINDOWS.find((item) => item.window.marketId === p.marketId);
+  const opening = row?.window.openingPrice, current = row?.window.currentPrice ?? PRICE_SERIES[p.asset]?.at(-1)?.price;
+  if (opening == null || current == null) return { label: "WAITING", className: "waiting" };
+  const marketIsUp = Number(current) >= Number(opening);
+  const aligned = p.direction === "UP" ? marketIsUp : !marketIsUp;
+  return aligned ? { label: "WINNING", className: "winning" } : { label: "LOSING", className: "losing" };
+}
 function renderFeed(limit = 8) {
-  return PREDS.slice(0, limit).map((p) => { const a = STATUS?.agents?.find((x) => x.id === p.agentId); return `<div class="pred"><div class="row1"><span class="dir ${p.direction}"><span class="dot" style="background:${a?.color || "#888"}"></span>${esc(a?.name || p.agentId)} calls ${p.direction}</span>${dirTag(p)}</div><div class="row2"><b>${esc(p.symbol)}</b> · ${esc(p.rationale)}</div><div class="kv"><span>P(UP) <b>${fmt(p.probUp, 3)}</b></span><span>confidence <b>${fmt(p.confidence * 100, 0)}%</b></span><span>YES <b>${fmt(p.bookYes?.bid, 3)} / ${fmt(p.bookYes?.ask, 3)}</b></span><span>${ago(p.createdAt)} ago</span></div></div>`; }).join("") || '<div class="empty-state">No predictions yet — the desks are watching the tape.</div>';
+  return PREDS.slice(0, limit).map((p) => {
+    const a = STATUS?.agents?.find((x) => x.id === p.agentId);
+    const row = WINDOWS.find((item) => item.window.marketId === p.marketId);
+    const opening = row?.window.openingPrice;
+    const current = row?.window.currentPrice ?? PRICE_SERIES[p.asset]?.at(-1)?.price;
+    const verdict = signalVerdict(p);
+    const question = row?.window.question || `${p.asset} event`;
+    return `<div class="pred"><div class="row1"><span class="dir ${p.direction}"><span class="dot" style="background:${a?.color || "#888"}"></span>${esc(a?.name || p.agentId)} calls ${p.direction}</span><span class="signal-verdict ${verdict.className}">${verdict.label}</span></div><div class="row2"><b>${esc(p.asset)}</b> · ${esc(question)}</div><div class="signal-prices"><span><small>OPENING</small><b>${money(opening)}</b></span><span><small>NOW</small><b>${money(current)}</b></span><span><small>STATUS</small><b class="${verdict.className}">${verdict.label}</b></span></div><div class="kv"><span>P(UP) <b>${fmt(p.probUp, 3)}</b></span><span>confidence <b>${fmt(p.confidence * 100, 0)}%</b></span><span>YES <b>${fmt(p.bookYes?.bid, 3)} / ${fmt(p.bookYes?.ask, 3)}</b></span><span>${ago(p.createdAt)} ago</span></div></div>`;
+  }).join("") || '<div class="empty-state">No predictions yet — the desks are watching the tape.</div>';
 }
 function renderTrades(limit = 8) {
   const rows = TRADES.slice(0, limit).map((t) => { const a = STATUS?.agents?.find((x) => x.id === t.agentId); const tx = t.txHash ? `<a target="_blank" href="${explorerBase}tx/${t.txHash}">${t.txHash.slice(0, 9)}…</a>` : ""; return `<tr><td class="mode-${t.mode}">${t.mode.toUpperCase()}</td><td>${esc(a?.name || t.agentId)}</td><td>${esc(t.symbol.split("/")[0])}</td><td>${t.side}</td><td class="num">${fmt(t.contracts, 1)}</td><td class="num">${t.price == null ? "–" : fmt(t.price, 3)}</td><td class="num">${t.error ? esc(t.error) : t.status.toUpperCase()}</td><td>${tx}</td></tr>`; }).join("");

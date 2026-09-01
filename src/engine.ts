@@ -92,6 +92,11 @@ export class Engine {
     return this.ticks.get(asset)?.[0]?.p ?? null;
   }
 
+  openingPrice(asset: string, windowStart: number): number | null {
+    const ticks = this.ticks.get(asset) ?? [];
+    return ticks.find((tick) => tick.t <= windowStart)?.p ?? null;
+  }
+
   priceHistory(asset: string, limit = 180) {
     return (this.ticks.get(asset) ?? [])
       .slice(0, Math.min(Math.max(limit, 20), 1500))

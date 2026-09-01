@@ -151,7 +151,11 @@ app.get("/api/active", (_req, res) => {
   const out = Object.values(status.windows).flatMap((w: any) =>
     w?.marketId
       ? {
-          window: { ...w, currentPrice: engine.currentPrice(w.asset) },
+          window: {
+            ...w,
+            currentPrice: engine.currentPrice(w.asset),
+            openingPrice: engine.openingPrice(w.asset, w.windowStart),
+          },
           predictions: AGENTS.map((a) => statsFor(a.id).id).map((id) => store.getPrediction(`${w.marketId}:${id}`) ?? null),
         }
       : []
