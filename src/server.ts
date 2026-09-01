@@ -177,6 +177,20 @@ app.post("/api/user/order/build", express.json(), async (req, res) => {
   }
 });
 
+app.post("/api/user/order/preview", express.json(), async (req, res) => {
+  try {
+    const { marketId, side, contracts } = req.body ?? {};
+    if (typeof marketId !== "string" || (side !== "YES" && side !== "NO")) {
+      return res.status(400).json({ error: "marketId and side are required" });
+    }
+    const qty = Number(contracts);
+    if (!Number.isFinite(qty)) return res.status(400).json({ error: "contracts must be numeric" });
+    res.json(await engine.previewUserOrder(marketId, side, qty));
+  } catch (e: any) {
+    res.status(400).json({ error: String(e?.shortMessage ?? e?.message ?? e).slice(0, 300) });
+  }
+});
+
 app.get("/", (_req, res) => {
   res.sendFile(join(process.cwd(), "public", "index.html"));
 });

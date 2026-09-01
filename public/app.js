@@ -2,6 +2,7 @@ const $ = (s) => document.querySelector(s);
 let STATUS = null, WINDOWS = [], LEADER = [], EQUITY = [], PREDS = [], TRADES = [];
 let walletAddress = localStorage.getItem("agentdesk.wallet") || null;
 let activeTrade = { marketId: null, symbol: "", side: "YES", agent: "" };
+let tradePreview = null, previewSeq = 0, previewTimer = null;
 const followed = new Set(JSON.parse(localStorage.getItem("agentdesk.following") || "[]"));
 const localOrders = JSON.parse(localStorage.getItem("agentdesk.orders") || "[]");
 const explorerBase = "https://shannon-explorer.somnia.network/";
@@ -64,18 +65,54 @@ function toggleFollow(id) {
 function followButton(id) { return `<button class="follow-button ${followed.has(id) ? "following" : ""}" data-follow="${esc(id)}">${followed.has(id) ? "Following" : "Follow desk"}</button>`; }
 function currentWindow() { return WINDOWS.find((item) => item.window.marketId === activeTrade.marketId)?.window; }
 function currentBook() { return (WINDOWS.find((item) => item.window.marketId === activeTrade.marketId)?.predictions || []).find(Boolean)?.bookYes || null; }
+function currentSignal() {
+  const row = WINDOWS.find((item) => item.window.marketId === activeTrade.marketId);
+  return (row?.predictions || []).find((p) => {
+    const agent = STATUS?.agents?.find((a) => a.id === p.agentId);
+    return activeTrade.agent && (p.agentId === activeTrade.agent || agent?.name === activeTrade.agent);
+  }) || (row?.predictions || []).find(Boolean) || null;
+}
 function openTrade(marketId, symbol, side = "YES", agent = "") {
-  activeTrade = { marketId, symbol, side, agent }; $("#trade-title").textContent = `Copy ${agent || "this"} signal`; $("#trade-context").textContent = `${symbol} · ${side === "YES" ? "YES / UP" : "NO / DOWN"} · IOC order`;
+  activeTrade = { marketId, symbol, side, agent };
+  const signal = currentSignal();
+  $("#trade-title").textContent = `Copy ${agent || "this"} signal`;
+  $("#trade-context").innerHTML = `<b>${esc(symbol)} · ${side === "YES" ? "YES / UP" : "NO / DOWN"}</b><br /><span>${signal ? `${esc(agent || "Desk")} calls ${esc(signal.direction)} · P(UP) ${fmt(signal.probUp, 3)} · confidence ${fmt(signal.confidence * 100, 0)}%` : "Agent signal context is not available for this window."}</span>`;
   setSide(side); $("#trade-status").textContent = ""; $("#trade-status").className = "trade-status"; $("#trade-modal").classList.remove("hidden"); $("#trade-modal").setAttribute("aria-hidden", "false"); updateTradeSummary();
 }
 function closeTrade() { $("#trade-modal").classList.add("hidden"); $("#trade-modal").setAttribute("aria-hidden", "true"); }
 function setSide(side) { activeTrade.side = side; document.querySelectorAll(".side-option").forEach((b) => b.classList.toggle("active", b.dataset.side === side)); updateTradeSummary(); }
 document.querySelectorAll(".side-option").forEach((b) => b.addEventListener("click", () => setSide(b.dataset.side)));
-$("#trade-contracts").addEventListener("input", updateTradeSummary); $("#trade-slippage").addEventListener("input", updateTradeSummary);
-function updateTradeSummary() {
-  const book = currentBook(), qty = Number($("#trade-contracts")?.value || 10), slip = Number($("#trade-slippage")?.value || 2);
-  const raw = activeTrade.side === "YES" ? book?.ask : book?.bid; const price = raw == null ? null : activeTrade.side === "YES" ? raw + slip / 100 : 1 - (raw - slip / 100);
-  if ($("#trade-summary")) $("#trade-summary").innerHTML = `Entry limit <b>${price == null ? "Waiting for quote" : fmt(price, 3)}</b><br />Estimated max collateral <b>${price == null ? "–" : fmt(price * qty, 3)} tUSDC</b><br />Execution <b>Immediate or cancel</b>`;
+function scheduleTradePreview() {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(updateTradeSummary, 240);
+}
+$("#trade-contracts").addEventListener("input", scheduleTradePreview); $("#trade-slippage").addEventListener("input", scheduleTradePreview);
+async function updateTradeSummary() {
+  const summary = $("#trade-summary"), qty = Number($("#trade-contracts")?.value || 10);
+  if (!summary) return;
+  tradePreview = null;
+  const requestId = ++previewSeq;
+  if (!Number.isFinite(qty) || qty < 1 || qty > 1000) {
+    summary.innerHTML = `<span class="quote-warning">Enter between 1 and 1,000 contracts.</span>`;
+    return;
+  }
+  summary.innerHTML = `<span class="quote-loading"><span class="spin"></span> Walking the live ${esc(activeTrade.symbol)} book…</span>`;
+  try {
+    const response = await fetch("/api/user/order/preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ marketId: activeTrade.marketId, side: activeTrade.side, contracts: qty }) });
+    const quote = await response.json();
+    if (requestId !== previewSeq) return;
+    if (!response.ok) throw new Error(quote.error || "Quote unavailable");
+    tradePreview = quote;
+    const partial = quote.filledContracts + 0.000001 < quote.quotedContracts;
+    if (quote.filledContracts <= 0) {
+      summary.innerHTML = `<span class="quote-warning">No liquidity is available for this size. Reduce the contracts or wait for the book to refill.</span>`;
+      return;
+    }
+    summary.innerHTML = `<div class="quote-grid"><span>Average entry<b>${fmt(quote.avgPrice, 3)}</b></span><span>Estimated max cost<b>${fmt(quote.costCollateral, 3)} tUSDC</b></span><span>Quoted size<b>${fmt(quote.quotedContracts, 2)} contracts</b></span><span>Expected fill<b>${fmt(quote.filledContracts, 2)} contracts</b></span><span>Book levels<b>${quote.levelsConsumed}</b></span><span>Slippage vs mid<b>${fmt(Math.abs(quote.slippageVsMid) * 100, 2)} pts</b></span></div>${partial ? `<div class="quote-warning">Thin book: ${fmt(quote.wouldRestContracts, 2)} contracts would not fill and will be cancelled by IOC.</div>` : ""}<div class="quote-note">Quote refreshed from the live book. Execution can change before confirmation.</div>`;
+  } catch (error) {
+    if (requestId !== previewSeq) return;
+    summary.innerHTML = `<span class="quote-warning">Quote unavailable: ${esc(error?.message || "the market may be between windows")}</span>`;
+  }
 }
 async function waitReceipt(hash) {
   for (let i = 0; i < 45; i++) { const receipt = await window.ethereum.request({ method: "eth_getTransactionReceipt", params: [hash] }); if (receipt) return receipt; await new Promise((resolve) => setTimeout(resolve, 1500)); }

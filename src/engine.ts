@@ -110,6 +110,8 @@ export class Engine {
       side === "YES"
         ? Math.min(0.999, book.ask + buffer)
         : Math.max(0.001, book.bid - buffer);
+    const preview = await this.readExchange.previewUserOrder(win, side, contracts);
+    if (preview.filledContracts <= 0) throw new Error("the live book cannot fill this quantity");
     const built = await this.readExchange.buildUserOrder(win, owner, side, contracts, limitYesPrice);
     return {
       market: {
@@ -120,9 +122,19 @@ export class Engine {
         secondsLeft: win.secondsLeft,
         yesSymbol: win.yesSymbol,
       },
+      preview,
       book,
       ...built,
     };
+  }
+
+  async previewUserOrder(marketId: string, side: "YES" | "NO", contracts: number) {
+    const win = [...this.windows.values()].find((candidate) => candidate?.marketId === marketId) ?? null;
+    if (!win || win.expiry <= Date.now() / 1000) throw new Error("market is no longer active");
+    if (!Number.isFinite(contracts) || contracts < 1 || contracts > 1000) {
+      throw new Error("contracts must be between 1 and 1,000");
+    }
+    return this.readExchange.previewUserOrder(win, side, contracts);
   }
 
   async start(): Promise<void> {

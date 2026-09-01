@@ -4,6 +4,7 @@ import {
   SOMNIA_MAINNET_ADDRESSES,
   SOMNIA_TESTNET_PRICE_FEED,
   isBinaryMarket,
+  quoteBinaryOrderOverBook,
 } from "@somnia-chain/markets-sdk";
 import { somniaMainnet, somniaShannon } from "@somnia-chain/markets-sdk/chains";
 import { createPublicClient, http, type Address } from "viem";
@@ -181,6 +182,53 @@ export class Exchange {
       collateralDecimals: this.collateralDecimals,
       network: config.network,
       chainId: config.network === "mainnet" ? 5031 : 50312,
+    };
+  }
+
+  /** Quote a user buy by walking the live four-sided DreamDEX binary book. */
+  async previewUserOrder(
+    win: WindowMarket,
+    side: "YES" | "NO",
+    contractsHuman: number,
+  ) {
+    const oneCollateral = 10n ** BigInt(this.collateralDecimals);
+    const book = await this.exchange.client.getBinaryOrderBook(win.pool, {
+      depth: 20,
+      decimals: this.collateralDecimals,
+    });
+    const grid = await this.exchange.client.getBinaryBookParams(win.pool);
+    const requestedRaw = BigInt(Math.floor(contractsHuman * 10 ** this.collateralDecimals));
+    const quantity = (requestedRaw / grid.lotSize) * grid.lotSize;
+    if (quantity <= 0n || quantity < grid.minQuantity) throw new Error("quantity is below this market's minimum lot");
+    const quote = quoteBinaryOrderOverBook(
+      book,
+      side === "YES" ? "BUY_YES" : "BUY_NO",
+      quantity,
+      oneCollateral,
+    );
+    const toHuman = (n: bigint) => Number(n) / 10 ** this.collateralDecimals;
+    return {
+      side,
+      requestedContracts: contractsHuman,
+      quotedContracts: toHuman(quantity),
+      avgPrice: toHuman(quote.avgPrice),
+      costCollateral: toHuman(quote.cost),
+      filledContracts: toHuman(quote.filledQuantity),
+      wouldRestContracts: toHuman(quote.wouldRest),
+      levelsConsumed: quote.levelsConsumed,
+      slippageVsMid: toHuman(quote.slippageVsMid),
+      book: {
+        yesBid: book.yesBids[0] ? { price: toHuman(book.yesBids[0].price), quantity: toHuman(book.yesBids[0].quantity) } : null,
+        yesAsk: book.yesAsks[0] ? { price: toHuman(book.yesAsks[0].price), quantity: toHuman(book.yesAsks[0].quantity) } : null,
+        noBid: book.noBids[0] ? { price: toHuman(book.noBids[0].price), quantity: toHuman(book.noBids[0].quantity) } : null,
+        noAsk: book.noAsks[0] ? { price: toHuman(book.noAsks[0].price), quantity: toHuman(book.noAsks[0].quantity) } : null,
+      },
+      market: {
+        marketId: win.marketId,
+        symbol: win.symbol,
+        expiry: win.expiry,
+        secondsLeft: Math.max(0, win.expiry - Date.now() / 1000),
+      },
     };
   }
 
