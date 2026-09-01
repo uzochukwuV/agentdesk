@@ -151,12 +151,25 @@ app.get("/api/active", (_req, res) => {
   const out = Object.values(status.windows).flatMap((w: any) =>
     w?.marketId
       ? {
-          window: w,
+          window: { ...w, currentPrice: engine.currentPrice(w.asset) },
           predictions: AGENTS.map((a) => statsFor(a.id).id).map((id) => store.getPrediction(`${w.marketId}:${id}`) ?? null),
         }
       : []
   );
   res.json(out);
+});
+app.get("/api/prices/:asset", (req, res) => {
+  res.json(engine.priceHistory(String(req.params.asset).toUpperCase()));
+});
+
+app.get("/api/account/portfolio", async (req, res) => {
+  try {
+    const account = String(req.query.address ?? "");
+    if (!isAddress(account)) return res.status(400).json({ error: "a valid wallet address is required" });
+    res.json(await engine.userPortfolio(account));
+  } catch (e: any) {
+    res.status(400).json({ error: String(e?.shortMessage ?? e?.message ?? e).slice(0, 300) });
+  }
 });
 
 app.post("/api/user/order/build", express.json(), async (req, res) => {

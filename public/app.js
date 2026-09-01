@@ -1,5 +1,5 @@
 const $ = (s) => document.querySelector(s);
-let STATUS = null, WINDOWS = [], LEADER = [], EQUITY = [], PREDS = [], TRADES = [];
+let STATUS = null, WINDOWS = [], LEADER = [], EQUITY = [], PREDS = [], TRADES = [], PRICE_SERIES = {};
 let walletAddress = localStorage.getItem("agentdesk.wallet") || null;
 let activeTrade = { marketId: null, symbol: "", side: "YES", agent: "" };
 let tradePreview = null, previewSeq = 0, previewTimer = null;
@@ -8,6 +8,7 @@ const localOrders = JSON.parse(localStorage.getItem("agentdesk.orders") || "[]")
 const explorerBase = "https://shannon-explorer.somnia.network/";
 const fmt = (x, d = 2) => x == null || Number.isNaN(Number(x)) ? "–" : Number(x).toFixed(d);
 const pct = (x, d = 1) => x == null ? "–" : `${Number(x).toFixed(d)}%`;
+const money = (x, d = 2) => x == null || Number.isNaN(Number(x)) ? "–" : `$${Number(x).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d })}`;
 const esc = (x) => String(x ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[c]));
 const ago = (ms) => { const s = Math.max(0, Math.floor((Date.now() - ms) / 1000)); return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h`; };
 const countdown = (expiry) => { const left = Math.max(0, Math.floor(expiry - Date.now() / 1000)); return `${String(Math.floor(left / 60)).padStart(2, "0")}:${String(left % 60).padStart(2, "0")}`; };
@@ -146,7 +147,9 @@ function renderWindowCards() {
   return WINDOWS.map(({ window: w, predictions }) => {
     const chips = (predictions || []).filter(Boolean).map((p) => { const a = STATUS?.agents?.find((x) => x.id === p.agentId) || { name: p.agentId, color: "#888" }; return `<div class="pred-chip"><div class="who"><span>${esc(a.name)}</span><b style="color:${a.color}">●</b></div><div class="call ${p.direction.toLowerCase()}">${p.direction} ${fmt(p.confidence * 100, 0)}%</div><div class="conf">${p.decision === "trade" ? "active signal" : "watching"} · P(UP) ${fmt(p.probUp, 2)}</div></div>`; }).join("");
     const lead = (predictions || []).find(Boolean); const side = lead?.direction === "DOWN" ? "NO" : "YES"; const agent = lead ? STATUS?.agents?.find((a) => a.id === lead.agentId)?.name || lead.agentId : "";
-    return `<article class="window-card"><div class="head"><span class="sym">${esc(w.symbol)}</span><span class="count" data-expiry="${w.expiry}">${countdown(w.expiry)}</span></div><div class="window-meta">EXPIRY WINDOW · ${esc(w.statusName || "TRADING")} · YES MID ${fmt(lead?.bookYes?.mid, 3)}</div><div class="pred-strip">${chips || '<span class="heading-note">Waiting for desk quotes…</span>'}</div><div class="window-actions">${lead ? `<button class="trade-button" data-trade="${esc(w.marketId)}" data-symbol="${esc(w.symbol)}" data-side="${side}" data-agent="${esc(agent)}">Copy ${side} call →</button>` : ""}<a href="#/app/agents" class="follow-button">View desks</a></div></article>`;
+    const current = w.currentPrice ?? lead?.sourcePriceAtSignal;
+    const question = w.question || `Will ${w.asset} be above the market strike at expiry?`;
+    return `<article class="window-card"><div class="head"><span class="sym">${esc(w.asset)} event</span><span class="count" data-expiry="${w.expiry}">${countdown(w.expiry)}</span></div><div class="event-question"><span>QUESTION</span><b>${esc(question)}</b></div><div class="window-meta">${esc(w.symbol)} · ${esc(w.statusName || "TRADING")} · closes in ${countdown(w.expiry)}</div><div class="event-facts"><span>Current ${esc(w.asset)} <b>${money(current)}</b></span><span>YES probability <b>${fmt(lead?.bookYes?.mid, 3)}</b></span></div><div class="pred-strip">${chips || '<span class="heading-note">Waiting for desk quotes…</span>'}</div><div class="window-actions">${lead ? `<button class="trade-button" data-trade="${esc(w.marketId)}" data-symbol="${esc(w.symbol)}" data-side="${side}" data-agent="${esc(agent)}">Copy ${side} call →</button>` : ""}<a href="#/app/agents" class="follow-button">View desks</a></div></article>`;
   }).join("");
 }
 function renderDeskCards() {
@@ -170,16 +173,39 @@ function renderChart(points = EQUITY) {
   const canvas = $("#equity-chart"); if (!canvas) return; const by = new Map(); points.forEach((p) => { if (!by.has(p.agentId)) by.set(p.agentId, []); by.get(p.agentId).push(p); });
   const all = points; if (!all.length) { drawEquity(canvas, []); return; } const minT = Math.min(...all.map((p) => p.t)), maxT = Math.max(...all.map((p) => p.t)); let minY = Math.min(0, ...all.map((p) => p.realizedPnl)), maxY = Math.max(0, ...all.map((p) => p.realizedPnl)); if (maxY - minY < 1) maxY = minY + 1; const dpr = devicePixelRatio || 1, w = canvas.clientWidth, h = 180; canvas.width = w * dpr; canvas.height = h * dpr; const ctx = canvas.getContext("2d"); ctx.scale(dpr, dpr); const X = (t) => 44 + ((t - minT) / Math.max(1, maxT - minT)) * (w - 52), Y = (y) => 8 + (1 - (y - minY) / (maxY - minY)) * (h - 26); ctx.strokeStyle = "#292c3a"; ctx.beginPath(); ctx.moveTo(0, Y(0)); ctx.lineTo(w, Y(0)); ctx.stroke(); by.forEach((ps, id) => { ctx.strokeStyle = STATUS?.agents?.find((a) => a.id === id)?.color || "#888"; ctx.lineWidth = 2; ctx.beginPath(); ps.forEach((p, i) => i ? ctx.lineTo(X(p.t), Y(p.realizedPnl)) : ctx.moveTo(X(p.t), Y(p.realizedPnl))); ctx.stroke(); });
 }
+function renderPriceCharts() {
+  document.querySelectorAll("[data-price-chart]").forEach((canvas) => {
+    const points = PRICE_SERIES[canvas.dataset.priceChart] || [];
+    const dpr = devicePixelRatio || 1, w = canvas.clientWidth, h = 150;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    const ctx = canvas.getContext("2d"); ctx.scale(dpr, dpr);
+    if (points.length < 2) {
+      ctx.fillStyle = "#777d91"; ctx.font = "10px monospace"; ctx.fillText("Waiting for oracle ticks…", 12, 28); return;
+    }
+    const values = points.map((p) => Number(p.price)).filter(Number.isFinite);
+    const min = Math.min(...values), max = Math.max(...values), pad = Math.max((max - min) * .12, max * .0005);
+    const lo = min - pad, hi = max + pad;
+    const X = (i) => 8 + (i / Math.max(1, points.length - 1)) * (w - 16);
+    const Y = (v) => 10 + (1 - (v - lo) / Math.max(1, hi - lo)) * (h - 25);
+    ctx.strokeStyle = "#292c3a"; ctx.lineWidth = 1;
+    for (let i = 0; i < 3; i++) { const y = 10 + i * ((h - 25) / 2); ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+    const gradient = ctx.createLinearGradient(0, 0, 0, h); gradient.addColorStop(0, "rgba(201,243,106,.24)"); gradient.addColorStop(1, "rgba(201,243,106,0)");
+    ctx.beginPath(); points.forEach((p, i) => i ? ctx.lineTo(X(i), Y(Number(p.price))) : ctx.moveTo(X(i), Y(Number(p.price)))); ctx.lineTo(X(points.length - 1), h - 15); ctx.lineTo(X(0), h - 15); ctx.closePath(); ctx.fillStyle = gradient; ctx.fill();
+    ctx.beginPath(); points.forEach((p, i) => i ? ctx.lineTo(X(i), Y(Number(p.price))) : ctx.moveTo(X(i), Y(Number(p.price)))); ctx.strokeStyle = "#c9f36a"; ctx.lineWidth = 2; ctx.stroke();
+  });
+}
 
 function renderOverview() {
   const trades = TRADES.filter((t) => t.status !== "failed"), liveWindows = WINDOWS.length, followedCount = followed.size;
   $("#page-content").innerHTML = `<div class="page-intro"><div><span class="section-kicker">LIVE DESK NETWORK</span><h2>Good morning, operator.</h2><p>Watch the market, understand the signal, and choose when to act.</p></div><div class="page-actions"><a class="section-link" href="#/app/agents">Compare desks →</a><a class="section-link" href="#/app/system">System status</a></div></div>
     <div class="metric-grid"><div class="metric-card"><small>Active windows</small><b>${liveWindows.toString().padStart(2, "0")}</b><div class="trend">BTC + ETH monitored</div></div><div class="metric-card"><small>Desks online</small><b>${STATUS?.agents?.length || 5}</b><div class="trend">All systems operational</div></div><div class="metric-card"><small>Following</small><b>${followedCount.toString().padStart(2, "0")}</b><div class="trend"><a href="#/app/account">Manage watchlist →</a></div></div><div class="metric-card"><small>Network trades</small><b>${trades.length}</b><div class="trend">Public activity log</div></div></div>
-    <section class="panel"><div class="panel-heading"><div><span class="section-kicker">MARKET PULSE</span><h2>Active event contracts</h2></div><span class="tiny-live">UPDATING LIVE</span></div><div class="windows">${renderWindowCards()}</div></section>
+    <section class="panel"><div class="panel-heading"><div><span class="section-kicker">MARKET PULSE</span><h2>What the market is asking</h2><p class="panel-subtitle">The event resolves against the oracle price at expiry.</p></div><span class="tiny-live">UPDATING LIVE</span></div><div class="windows">${renderWindowCards()}</div></section>
+    <section class="panel price-panel"><div class="panel-heading"><div><span class="section-kicker">ORACLE PRICES</span><h2>Where the market is now</h2><p class="panel-subtitle">Live Somnia price feed, shown in dollars.</p></div><span class="heading-note">Streaming live data</span></div><div class="price-chart-grid">${(STATUS?.assets || ["BTC", "ETH"]).map((asset) => { const last = PRICE_SERIES[asset]?.at(-1); return `<div class="price-chart-card"><div class="price-chart-heading"><span>${esc(asset)} / USD</span><b>${money(last?.price)}</b></div><canvas data-price-chart="${esc(asset)}" height="150"></canvas><div class="chart-caption">Recent oracle ticks · ${last ? `${ago(last.t * 1000)} ago` : "waiting for ticks"}</div></div>`; }).join("")}</div></section>
     <div class="content-grid"><section class="panel"><div class="panel-heading"><div><span class="section-kicker">DESK RANKING</span><h2>Who is seeing what?</h2></div><a class="section-link" href="#/app/agents">All agents →</a></div><div class="desk-grid">${renderDeskCards()}</div></section><section class="panel"><div class="panel-heading"><div><span class="section-kicker">FOLLOWING</span><h2>Your watchlist</h2></div><a class="section-link" href="#/app/account">View all →</a></div>${renderWatchlist(true)}</section></div>
     <div class="content-grid"><section class="panel"><div class="panel-heading"><div><span class="section-kicker">SIGNAL FEED</span><h2>Latest calls</h2></div><span class="heading-note">Published before resolution</span></div><div class="feed">${renderFeed()}</div></section><section class="panel"><div class="panel-heading"><div><span class="section-kicker">EXECUTION</span><h2>Network activity</h2></div><a class="section-link" href="#/app/system">View system →</a></div><div class="trades">${renderTrades()}</div></section></div>
     <section class="panel equity-panel"><div class="panel-heading"><div><span class="section-kicker">PERFORMANCE</span><h2>Settled PnL</h2></div><span class="heading-note">Not marks-to-market</span></div><canvas id="equity-chart" height="180"></canvas><div class="equity-legend">${LEADER.map((s) => `<span><span class="dot" style="background:${s.color}"></span>${esc(s.name)} ${fmt(s.pnl, 2)}</span>`).join("")}</div></section>`;
   renderChart();
+  renderPriceCharts();
 }
 function renderWatchlist(compact = false) {
   const items = LEADER.filter((s) => followed.has(s.id));
@@ -209,9 +235,25 @@ function nativeBalance() {
   if (!walletAddress || !window.ethereum) return null;
   return window.ethereum.request({ method: "eth_getBalance", params: [walletAddress, "latest"] }).then((hex) => Number(BigInt(hex)) / 1e18).catch(() => null);
 }
+function renderPortfolioSections(portfolio) {
+  if (!walletAddress) return "";
+  if (portfolio?.error) return `<section class="panel portfolio-panel"><div class="panel-heading"><div><span class="section-kicker">ON-CHAIN PORTFOLIO</span><h2>Portfolio unavailable</h2></div></div><div class="empty-state">${esc(portfolio.error)}</div></section>`;
+  const positions = portfolio?.positions || [], claims = portfolio?.claimable || [];
+  const positionMarkup = positions.length ? positions.map((p) => {
+    const held = (p.outcome?.yes || 0) + (p.outcome?.no || 0);
+    return `<div class="portfolio-row"><div><strong>${esc(p.question || "Event contract")}</strong><small>${esc(p.status || "Trading")} · ${p.expiry ? `expires ${new Date(p.expiry * 1000).toLocaleString()}` : "expiry unavailable"}</small></div><div class="position-outcomes"><span class="${p.outcome?.yes ? "positive" : ""}">YES ${fmt(p.outcome?.yes, 2)}</span><span class="${p.outcome?.no ? "negative" : ""}">NO ${fmt(p.outcome?.no, 2)}</span></div><div class="position-value"><b>${fmt(held, 2)} shares</b><small>marked ${fmt(p.markValue, 2)} tUSDC</small></div><div class="${Number(p.unrealizedPnl) >= 0 ? "positive" : "negative"}"><b>${Number(p.unrealizedPnl) >= 0 ? "+" : ""}${fmt(p.unrealizedPnl, 2)} tUSDC</b><small>unrealized PnL</small></div></div>`;
+  }).join("") : '<div class="empty-state">No open event positions in this wallet yet. Copy a desk call to see it here.</div>';
+  const claimMarkup = claims.length ? claims.map((c) => `<div class="portfolio-row claim-row"><div><strong>${esc(c.question)}</strong><small>${esc(c.status)} · ${c.outcome} won</small></div><div><b>${fmt(c.contracts, 2)} shares</b><small>redeemable balance</small></div><div class="positive"><b>${fmt(c.estimatedPayout, 2)} tUSDC</b><small>estimated payout</small></div></div>`).join("") : '<div class="empty-state">Nothing is redeemable right now. Settled winning or voided positions will appear here.</div>';
+  return `<section class="panel portfolio-panel"><div class="panel-heading"><div><span class="section-kicker">ON-CHAIN PORTFOLIO</span><h2>Your live positions</h2><p class="panel-subtitle">Read directly from DreamDEX for this wallet.</p></div><div class="account-balance"><b>${fmt(portfolio?.balances?.collateral, 2)} tUSDC</b><span>available collateral</span></div></div><div class="portfolio-list">${positionMarkup}</div></section><section class="panel portfolio-panel"><div class="panel-heading"><div><span class="section-kicker">SETTLEMENTS</span><h2>Redeemable balances</h2><p class="panel-subtitle">These positions have already settled and can be claimed.</p></div><span class="heading-note">${claims.length} ready</span></div><div class="portfolio-list">${claimMarkup}</div></section>`;
+}
 async function renderAccount() {
   const balance = await nativeBalance(); const currentFollows = LEADER.filter((s) => followed.has(s.id));
-  $("#page-content").innerHTML = `<div class="page-intro"><div><span class="section-kicker">PERSONAL WORKSPACE</span><h2>Your account.</h2><p>One place for your wallet, followed desks, and copy-trade activity.</p></div><div class="page-actions"><a class="section-link" href="#/app/agents">Find a desk →</a></div></div><div class="account-card"><section class="panel connect-card"><div><span class="section-kicker">WALLET CONNECTION</span><h2>${walletAddress ? "Your wallet is connected." : "Connect your wallet."}</h2><p>${walletAddress ? "You stay in control. AgentDesk can prepare transactions, but only your wallet can approve them." : "Connect an injected browser wallet to copy an active desk call. Your keys never leave your wallet."}</p></div><div>${walletAddress ? `<div class="address-box">${walletAddress}</div><div class="kv"><span>Somnia testnet</span><span>STT balance <b>${balance == null ? "—" : fmt(balance, 4)}</b></span></div>` : `<button class="primary-button" data-connect>Connect wallet <span>→</span></button>`}</div></section><section class="panel"><div class="panel-heading"><div><span class="section-kicker">WATCHLIST</span><h2>Followed desks</h2></div><span class="heading-note">${currentFollows.length} selected</span></div>${renderWatchlist()}</section></div><section class="panel account-activity"><div class="panel-heading"><div><span class="section-kicker">YOUR ACTIVITY</span><h2>Signed orders</h2></div><span class="heading-note">Saved locally in this browser</span></div>${localOrders.length ? `<div class="watch-list">${localOrders.map((o) => `<div class="watch-row"><div><strong>${esc(o.symbol)} · ${o.side}</strong><small>${o.contracts} contracts · ${ago(o.createdAt)} ago</small></div><a class="desk-link" target="_blank" href="${explorerBase}tx/${o.hash}">${o.hash.slice(0, 12)}… ↗</a></div>`).join("")}</div>` : '<div class="empty-state">No signed orders from this browser yet. Copying a call will add the transaction here.</div>'}</section>`;
+  let portfolio = null;
+  if (walletAddress) {
+    try { const response = await fetch(`/api/account/portfolio?address=${encodeURIComponent(walletAddress)}`); portfolio = await response.json(); if (!response.ok) portfolio = { error: portfolio.error || "Could not read the wallet portfolio." }; }
+    catch { portfolio = { error: "Could not reach the portfolio reader." }; }
+  }
+  $("#page-content").innerHTML = `<div class="page-intro"><div><span class="section-kicker">PERSONAL WORKSPACE</span><h2>Your account.</h2><p>One place for your wallet, positions, settlements, and copy-trade activity.</p></div><div class="page-actions"><a class="section-link" href="#/app/agents">Find a desk →</a></div></div><div class="account-card"><section class="panel connect-card"><div><span class="section-kicker">WALLET CONNECTION</span><h2>${walletAddress ? "Your wallet is connected." : "Connect your wallet."}</h2><p>${walletAddress ? "You stay in control. AgentDesk can prepare transactions, but only your wallet can approve them." : "Connect an injected browser wallet to copy an active desk call. Your keys never leave your wallet."}</p></div><div>${walletAddress ? `<div class="address-box">${walletAddress}</div><div class="kv"><span>Somnia testnet</span><span>STT balance <b>${balance == null ? "—" : fmt(balance, 4)}</b></span></div>` : `<button class="primary-button" data-connect>Connect wallet <span>→</span></button>`}</div></section><section class="panel"><div class="panel-heading"><div><span class="section-kicker">WATCHLIST</span><h2>Followed desks</h2></div><span class="heading-note">${currentFollows.length} selected</span></div>${renderWatchlist()}</section></div>${renderPortfolioSections(portfolio)}<section class="panel account-activity"><div class="panel-heading"><div><span class="section-kicker">YOUR ACTIVITY</span><h2>Signed orders</h2></div><span class="heading-note">Saved locally in this browser</span></div>${localOrders.length ? `<div class="watch-list">${localOrders.map((o) => `<div class="watch-row"><div><strong>${esc(o.symbol)} · ${o.side}</strong><small>${o.contracts} contracts · ${ago(o.createdAt)} ago</small></div><a class="desk-link" target="_blank" href="${explorerBase}tx/${o.hash}">${o.hash.slice(0, 12)}… ↗</a></div>`).join("")}</div>` : '<div class="empty-state">No signed orders from this browser yet. Copying a call will add the transaction here.</div>'}</section>`;
 }
 function renderCurrent() {
   if (location.hash === "" || location.hash === "#/" || !location.hash.startsWith("#/app")) { $("#landing-view").classList.remove("hidden"); $("#app-view").classList.add("hidden"); return; }
@@ -228,6 +270,12 @@ const eventSource = new EventSource("/api/stream"); ["prediction", "trade", "equ
 async function fetchAll() {
   try {
     [STATUS, WINDOWS, LEADER, PREDS, TRADES, EQUITY] = await Promise.all([fetch("/api/status").then((r) => r.json()), fetch("/api/active").then((r) => r.json()), fetch("/api/leaderboard").then((r) => r.json()), fetch("/api/predictions?limit=80").then((r) => r.json()), fetch("/api/trades?limit=80").then((r) => r.json()), fetch("/api/equity").then((r) => r.json())]);
+    const assets = STATUS?.assets || ["BTC", "ETH"];
+    const priceRows = await Promise.all(assets.map(async (asset) => {
+      try { return [asset, await fetch(`/api/prices/${encodeURIComponent(asset)}`).then((r) => r.json())]; }
+      catch { return [asset, []]; }
+    }));
+    PRICE_SERIES = Object.fromEntries(priceRows);
     updateWalletUi(); $("#side-health").textContent = STATUS.lastScan?.error ? "Needs attention" : "Operational"; $("#side-health-detail").textContent = STATUS.lastScan?.error || "Streaming live data"; renderCurrent();
   } catch { $("#landing-mode").textContent = "OFFLINE"; $("#app-mode").textContent = "OFFLINE"; }
 }

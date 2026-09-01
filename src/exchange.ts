@@ -14,6 +14,8 @@ import type { BookYes } from "./store.js";
 export interface WindowMarket {
   marketId: string;
   symbol: string;
+  question: string | null;
+  strike: string | null;
   yesSymbol: string;
   asset: string;
   intervalSec: number;
@@ -96,6 +98,8 @@ export class Exchange {
           const w: WindowMarket = {
             marketId: info.marketId as string,
             symbol: m.symbol ?? String(info.asset),
+            question: info.question ?? null,
+            strike: info.strike ?? null,
             yesSymbol: (m as any).outcomes?.[0]?.symbol ?? `${m.symbol}#YES`,
             asset,
             intervalSec,
@@ -229,6 +233,58 @@ export class Exchange {
         expiry: win.expiry,
         secondsLeft: Math.max(0, win.expiry - Date.now() / 1000),
       },
+    };
+  }
+
+  /** Read a connected wallet's binary positions and settled redeemable claims. */
+  async getUserPortfolio(account: Address) {
+    const [positions, claimable, collateral, native] = await Promise.all([
+      this.exchange.client.getOpenPositionsWithPnL(account),
+      this.exchange.client.getClaimable(account),
+      this.getCollateralBalanceHuman(account),
+      this.getNativeBalanceHuman(account),
+    ]);
+    const human = (value: bigint, decimals: number) => Number(value) / 10 ** decimals;
+    const liveStatuses = new Set(["Listed", "Trading", "Locked"]);
+    const positionRows = positions.filter((position) => liveStatuses.has(position.market.status)).map((position) => {
+      const decimals = position.market.quoteDecimals ?? this.collateralDecimals;
+      return {
+        marketId: position.market.id,
+        question: position.market.question,
+        status: position.market.status,
+        expiry: Number(position.market.expiry),
+        outcome: {
+          yes: human(position.balanceYes, decimals),
+          no: human(position.balanceNo, decimals),
+        },
+        costBasis: human(position.costBasis, decimals),
+        avgCost: human(position.avgCost, decimals),
+        markValue: human(position.markValue, decimals),
+        unrealizedPnl: human(position.unrealizedPnl, decimals),
+        realizedPnl: human(position.realizedPnl, decimals),
+      };
+    });
+    const marketDetails = await Promise.all(
+      claimable.map(async (claim) => ({
+        claim,
+        market: await this.exchange.client.getBinaryMarket(claim.marketId),
+      })),
+    );
+    return {
+      account,
+      balances: { collateral, native },
+      positions: positionRows,
+      claimable: marketDetails.map(({ claim, market }) => {
+        const decimals = market?.quoteDecimals ?? this.collateralDecimals;
+        return {
+          marketId: claim.marketId,
+          question: market?.question ?? `Settled event ${claim.marketId.slice(0, 10)}…`,
+          status: claim.status,
+          outcome: claim.outcomeIdx === 0 ? "YES" : "NO",
+          contracts: human(claim.amount, decimals),
+          estimatedPayout: human(claim.estPayout, decimals),
+        };
+      }),
     };
   }
 

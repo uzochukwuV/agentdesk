@@ -88,6 +88,21 @@ export class Engine {
     };
   }
 
+  currentPrice(asset: string): number | null {
+    return this.ticks.get(asset)?.[0]?.p ?? null;
+  }
+
+  priceHistory(asset: string, limit = 180) {
+    return (this.ticks.get(asset) ?? [])
+      .slice(0, Math.min(Math.max(limit, 20), 1500))
+      .reverse()
+      .map((tick) => ({ t: tick.t, price: tick.p, ema: tick.e }));
+  }
+
+  async userPortfolio(account: Address) {
+    return this.readExchange.getUserPortfolio(account);
+  }
+
   /** Resolve an active market and prepare an unsigned user order for browser signing. */
   async buildUserOrder(
     marketId: string,
