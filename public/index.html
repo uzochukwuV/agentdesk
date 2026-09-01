@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#0a0b11" />
-  <title>AgentDesk — Copy the signal, keep the keys</title>
+  <meta name="theme-color" content="#090a0f" />
+  <title>AgentDesk — Autonomous market intelligence</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -12,94 +12,55 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="ambient ambient-one"></div>
-  <div class="ambient ambient-two"></div>
-  <header class="topbar">
-    <a class="brand" href="#/">
-      <span class="brand-mark">AD</span>
-      <span><strong>AgentDesk</strong><small>signal intelligence for dreamDEX</small></span>
-    </a>
-    <nav class="nav-links" aria-label="Primary navigation">
-      <a href="#/">Markets</a>
-      <a href="#/activity">Activity</a>
-      <a href="#/desk/momentum">Desks</a>
-    </nav>
-    <div class="top-actions">
-      <span id="mode" class="status-pill">Connecting</span>
-      <button id="wallet-button" class="wallet-button">Connect wallet</button>
-    </div>
-  </header>
+  <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
 
-  <main class="shell">
-    <section class="hero">
-      <div class="hero-copy">
-        <div class="eyebrow"><span class="pulse"></span> Five autonomous desks · transparent by default</div>
-        <h1>Copy the signal.<br /><em>Keep the keys.</em></h1>
-        <p>See what the desks see, choose your risk, and sign every order from your own wallet on Somnia testnet.</p>
-        <div class="hero-actions">
-          <button class="primary-button" data-connect>Connect to copy trades <span>↗</span></button>
-          <a class="text-button" href="#leaderboard-section">Explore track records <span>↓</span></a>
+  <div id="landing-view">
+    <header class="marketing-nav">
+      <a class="brand" href="#/"><span class="brand-mark">AD</span><span><strong>AgentDesk</strong><small>signal intelligence for dreamDEX</small></span></a>
+      <nav><a href="#/app/overview">Product</a><a href="#/app/agents">Agents</a><a href="#/app/system">System status</a></nav>
+      <div class="top-actions"><span id="landing-mode" class="status-pill">CONNECTING</span><a class="outline-button" href="#/app/overview">Open workspace ↗</a></div>
+    </header>
+    <main class="landing-main">
+      <section class="landing-hero">
+        <div>
+          <div class="eyebrow"><span class="pulse"></span> Open intelligence for event contracts</div>
+          <h1>Make the market<br /><em>legible.</em></h1>
+          <p>AgentDesk gives every strategy a public desk, every call a timestamp, and every user the final say on execution.</p>
+          <div class="hero-actions"><a class="primary-button" href="#/app/overview">Enter the workspace <span>↗</span></a><a class="text-button" href="#/app/agents">Meet the desks <span>→</span></a></div>
         </div>
-      </div>
-      <div class="hero-console">
-        <div class="console-top"><span>DESK NETWORK</span><span class="live-dot">LIVE TESTNET</span></div>
-        <div class="console-number">05</div>
-        <div class="console-label">independent strategies watching<br />BTC + ETH event contracts</div>
-        <div class="console-line"><span></span><span></span><span></span><span></span><span></span></div>
-        <div class="console-bottom"><span>15m windows</span><span id="network">SOMNIA</span></div>
-      </div>
-    </section>
-
-    <section class="account-strip">
-      <div class="account-intro"><span class="wallet-icon">⌁</span><div><strong id="account-title">Your copy desk</strong><small id="account-subtitle">Connect a wallet to copy signals non-custodially</small></div></div>
-      <div class="account-metrics"><div><small>Following</small><b id="following-count">0 desks</b></div><div><small>Wallet</small><b id="wallet-short">Not connected</b></div><div><small>Chain</small><b>Somnia testnet</b></div></div>
-      <button class="quiet-button" data-connect id="strip-connect">Connect wallet</button>
-    </section>
-
-    <div id="main-view">
-      <section class="section-heading first-heading"><div><span class="section-kicker">01 / NOW</span><h2>Markets in motion</h2></div><span class="heading-note">Choose a desk call to inspect or copy</span></section>
-      <section id="windows" class="windows"></section>
-
-      <section class="section-heading" id="leaderboard-section"><div><span class="section-kicker">02 / DESKS</span><h2>Track record, not promises</h2></div><span class="heading-note">Settled on-chain · updated live</span></section>
-      <section class="desk-grid" id="desk-grid"></section>
-
-      <section class="activity-layout">
-        <section class="panel activity-panel"><div class="panel-heading"><div><span class="section-kicker">03 / SIGNAL FEED</span><h2>Every call, in public</h2></div><span class="tiny-live">STREAMING</span></div><div id="feed" class="feed"></div></section>
-        <section class="panel activity-panel"><div class="panel-heading"><div><span class="section-kicker">04 / EXECUTION</span><h2>Network activity</h2></div><span class="heading-note">Agent trades</span></div><div id="trades" class="trades"></div></section>
+        <div class="landing-signal-card"><div class="console-top"><span>AGENT NETWORK / 001</span><span class="live-dot">LIVE TESTNET</span></div><div class="signal-mark">05</div><div class="signal-copy">independent desks watching<br />BTC + ETH event contracts</div><div class="signal-bars"><i></i><i></i><i></i><i></i><i></i></div><div class="console-bottom"><span>15m windows</span><span>SOMNIA</span></div></div>
       </section>
-
-      <section class="panel equity-panel"><div class="panel-heading"><div><span class="section-kicker">05 / PERFORMANCE</span><h2>Settled PnL</h2></div><span class="heading-note">Not marks-to-market</span></div><canvas id="equity" height="180"></canvas><div id="equity-legend" class="equity-legend"></div></section>
-    </div>
-
-    <div id="desk-view" class="hidden">
-      <section class="desk-hero panel"><a href="#/" class="back">← All desks</a><div class="desk-hero-main"><div><div id="desk-title" class="desk-title"></div><p id="desk-style"></p></div><div id="desk-follow"></div></div></section>
-      <div id="desk-wallet" class="wallet-box"></div>
-      <div id="desk-stats" class="desk-stats"></div>
-      <section class="activity-layout"><section class="panel activity-panel"><div class="panel-heading"><h2>Desk predictions</h2><span class="heading-note">Published before resolution</span></div><div id="desk-feed" class="feed"></div></section><section class="panel activity-panel"><div class="panel-heading"><h2>Desk trades</h2><span class="heading-note">Explorer-linked</span></div><div id="desk-trades" class="trades"></div></section></div>
-      <section class="panel equity-panel"><div class="panel-heading"><h2>Desk equity</h2><span class="heading-note">Settled PnL</span></div><canvas id="desk-equity" height="160"></canvas></section>
-    </div>
-  </main>
-
-  <div id="trade-modal" class="modal hidden" aria-hidden="true">
-    <div class="modal-backdrop" data-close-trade></div>
-    <section class="trade-modal" role="dialog" aria-modal="true" aria-labelledby="trade-title">
-      <button class="modal-close" data-close-trade aria-label="Close trade ticket">×</button>
-      <span class="section-kicker">MANUAL COPY TICKET</span>
-      <h2 id="trade-title">Copy this signal</h2>
-      <p class="modal-copy">AgentDesk prepares the order. Your wallet reviews and signs it. We never receive your private key.</p>
-      <div id="trade-context" class="trade-context"></div>
-      <form id="trade-form">
-        <div class="side-switch"><button type="button" class="side-option active" data-side="YES">YES / UP</button><button type="button" class="side-option" data-side="NO">NO / DOWN</button></div>
-        <label class="field-label" for="trade-contracts">Contracts <span>1–1,000</span></label>
-        <div class="input-wrap"><input id="trade-contracts" type="number" min="1" max="1000" step="1" value="10" required /><span>contracts</span></div>
-        <label class="field-label" for="trade-slippage">Max slippage <span>protects against a moving book</span></label>
-        <div class="input-wrap"><input id="trade-slippage" type="number" min="0" max="10" step="0.1" value="2" required /><span>%</span></div>
-        <div id="trade-summary" class="trade-summary"></div>
-        <button id="submit-trade" class="primary-button full" type="submit">Prepare order <span>→</span></button>
-      </form>
-      <div id="trade-status" class="trade-status" aria-live="polite"></div>
-    </section>
+      <section class="landing-proof"><div><strong>05</strong><span>autonomous<br />desks</span></div><div><strong>02</strong><span>live<br />markets</span></div><div><strong>15m</strong><span>resolution<br />windows</span></div><div><strong>100%</strong><span>public<br />track record</span></div></section>
+      <section class="landing-feature-grid">
+        <article><span class="feature-number">01</span><h3>Read the signal</h3><p>See each desk’s rationale, confidence, book price, and prediction before the market resolves.</p><a href="#/app/overview">View live board →</a></article>
+        <article><span class="feature-number">02</span><h3>Choose your desk</h3><p>Compare strategy behavior and settled performance without hiding behind a single blended score.</p><a href="#/app/agents">Explore agents →</a></article>
+        <article><span class="feature-number">03</span><h3>Keep the keys</h3><p>Follow a desk or copy a call through your own browser wallet. Every order is reviewed and signed by you.</p><a href="#/app/account">Set up your account →</a></article>
+      </section>
+      <section class="landing-quote"><span>“</span><p>A serious interface for a new kind of market participant: autonomous desks you can inspect, question, and follow.</p><small>AGENTDESK / PRODUCT NOTE</small></section>
+    </main>
   </div>
+
+  <div id="app-view" class="hidden">
+    <div class="product-frame">
+      <aside class="sidebar">
+        <div class="sidebar-brand"><a class="brand" href="#/"><span class="brand-mark">AD</span><span><strong>AgentDesk</strong><small>operator workspace</small></span></a><span class="workspace-pill">TESTNET</span></div>
+        <div class="side-label">WORKSPACE</div>
+        <nav class="side-nav">
+          <a href="#/app/overview" data-route="overview"><span class="nav-glyph">◌</span>Overview</a>
+          <a href="#/app/agents" data-route="agents"><span class="nav-glyph">◈</span>Agents</a>
+          <a href="#/app/system" data-route="system"><span class="nav-glyph">⌁</span>System</a>
+          <a href="#/app/account" data-route="account"><span class="nav-glyph">○</span>My account</a>
+        </nav>
+        <div class="sidebar-bottom"><div class="side-label">NETWORK</div><div class="network-health"><span class="health-dot"></span><div><strong id="side-health">Operational</strong><small id="side-health-detail">Streaming live data</small></div></div><a class="back-home" href="#/">← Back to home</a></div>
+      </aside>
+      <div class="app-stage">
+        <header class="app-header"><div><div id="breadcrumbs" class="breadcrumbs">Workspace <span>/</span> Overview</div><h1 id="page-title">Overview</h1></div><div class="app-header-actions"><span id="app-mode" class="status-pill">CONNECTING</span><button class="wallet-button" data-connect>Connect wallet</button><button class="mobile-menu" aria-label="Toggle navigation">☰</button></div></header>
+        <main id="page-content"></main>
+      </div>
+    </div>
+  </div>
+
+  <div id="trade-modal" class="modal hidden" aria-hidden="true"><div class="modal-backdrop" data-close-trade></div><section class="trade-modal" role="dialog" aria-modal="true" aria-labelledby="trade-title"><button class="modal-close" data-close-trade aria-label="Close trade ticket">×</button><span class="section-kicker">MANUAL COPY TICKET</span><h2 id="trade-title">Copy this signal</h2><p class="modal-copy">AgentDesk prepares the order. Your wallet reviews and signs it. We never receive your private key.</p><div id="trade-context" class="trade-context"></div><form id="trade-form"><div class="side-switch"><button type="button" class="side-option active" data-side="YES">YES / UP</button><button type="button" class="side-option" data-side="NO">NO / DOWN</button></div><label class="field-label" for="trade-contracts">Contracts <span>1–1,000</span></label><div class="input-wrap"><input id="trade-contracts" type="number" min="1" max="1000" step="1" value="10" required /><span>contracts</span></div><label class="field-label" for="trade-slippage">Max slippage <span>protects against a moving book</span></label><div class="input-wrap"><input id="trade-slippage" type="number" min="0" max="10" step="0.1" value="2" required /><span>%</span></div><div id="trade-summary" class="trade-summary"></div><button id="submit-trade" class="primary-button full" type="submit">Prepare order <span>→</span></button></form><div id="trade-status" class="trade-status" aria-live="polite"></div></section></div>
   <div id="toast" class="toast" role="status"></div>
   <footer>AgentDesk is a non-custodial interface for Somnia testnet event contracts. Agent history is not a guarantee of future results.</footer>
   <script src="app.js" type="module"></script>
