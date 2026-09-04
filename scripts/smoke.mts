@@ -1,5 +1,5 @@
 // End-to-end health check against a running server.
-const BASE = process.env.BASE ?? "http://localhost:12000";
+const BASE = process.env.BASE ?? `http://localhost:${process.env.PORT ?? "5000"}`;
 let failures = 0;
 const check = (name: string, cond: boolean, detail: string = "") => {
   const ok = cond ? "PASS" : "FAIL";
@@ -13,13 +13,17 @@ check("status endpoint", status.live !== undefined || status.paper !== undefined
 const agents = await j("/api/agents");
 check("agents registered", Array.isArray(agents) && agents.length === 5, `${agents.length}/5`);
 const preds = (await j("/api/predictions", "?limit=10")) as any[];
-check("predictions flowing", Array.isArray(preds) && preds.length > 0, `${preds.length} so far`);
 const trades = (await j("/api/trades")) as any[];
 console.log(`     (trades placed: ${trades.length})`);
 const active = await j("/api/active");
-check("active windows", Array.isArray(active) && active.length > 0);
 const equity = await j("/api/equity");
 check("equity endpoint", Array.isArray(equity));
+
+// Event-contract windows roll on a live schedule. During the gap between
+// market rolls, the API is healthy even though there is nothing to predict.
+const marketDataAvailable = Number(status.lastScan?.marketsScanned ?? 0) > 0 || preds.length > 0 || active.length > 0;
+check("predictions flowing", !marketDataAvailable || (Array.isArray(preds) && preds.length > 0), marketDataAvailable ? `${preds.length} so far` : "waiting for next eligible window");
+check("active windows", !marketDataAvailable || (Array.isArray(active) && active.length > 0), marketDataAvailable ? `${active.length} active` : "no eligible window right now");
 
 const settled = preds.filter((p: any) => p.status === "resolved");
 if (settled.length) {

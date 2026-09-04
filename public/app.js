@@ -149,7 +149,8 @@ function renderWindowCards() {
     const lead = (predictions || []).find(Boolean); const side = lead?.direction === "DOWN" ? "NO" : "YES"; const agent = lead ? STATUS?.agents?.find((a) => a.id === lead.agentId)?.name || lead.agentId : "";
     const current = w.currentPrice ?? lead?.sourcePriceAtSignal;
     const question = w.question || `Will ${w.asset} be above the market strike at expiry?`;
-    return `<article class="window-card"><div class="head"><span class="sym">${esc(w.asset)} event</span><span class="count" data-expiry="${w.expiry}">${countdown(w.expiry)}</span></div><div class="event-question"><span>QUESTION</span><b>${esc(question)}</b></div><div class="window-meta">${esc(w.symbol)} · ${esc(w.statusName || "TRADING")} · closes in ${countdown(w.expiry)}</div><div class="event-facts"><span>Current ${esc(w.asset)} <b>${money(current)}</b></span><span>YES probability <b>${fmt(lead?.bookYes?.mid, 3)}</b></span></div><div class="pred-strip">${chips || '<span class="heading-note">Waiting for desk quotes…</span>'}</div><div class="window-actions">${lead ? `<button class="trade-button" data-trade="${esc(w.marketId)}" data-symbol="${esc(w.symbol)}" data-side="${side}" data-agent="${esc(agent)}">Copy ${side} call →</button>` : ""}<a href="#/app/agents" class="follow-button">View desks</a></div></article>`;
+    const bid = lead?.bookYes?.bid, ask = lead?.bookYes?.ask;
+    return `<article class="window-card"><div class="head"><span class="sym">${esc(w.asset)} event</span><span class="count" data-expiry="${w.expiry}">${countdown(w.expiry)}</span></div><div class="event-question"><span>QUESTION</span><b>${esc(question)}</b></div><div class="window-meta">${esc(w.symbol)} · ${esc(w.statusName || "TRADING")} · closes in ${countdown(w.expiry)}</div><div class="event-facts"><span>Current ${esc(w.asset)} <b>${money(current)}</b></span><span>YES probability <b>${fmt(lead?.bookYes?.mid, 3)}</b></span></div><div class="quote-strip"><div><small>YES BID</small><b>${fmt(bid, 3)}</b></div><div><small>YES ASK</small><b>${fmt(ask, 3)}</b></div><div><small>SPREAD</small><b>${bid != null && ask != null ? fmt(ask - bid, 3) : "—"}</b></div><div><small>MODE</small><b>${lead?.decision === "trade" ? "IOC" : "WATCH"}</b></div></div><div class="pred-strip">${chips || '<span class="heading-note">Waiting for desk quotes…</span>'}</div><div class="window-actions">${lead ? `<button class="trade-button" data-trade="${esc(w.marketId)}" data-symbol="${esc(w.symbol)}" data-side="${side}" data-agent="${esc(agent)}">Copy ${side} call →</button>` : ""}<a href="#/app/agents" class="follow-button">View desks</a></div></article>`;
   }).join("");
 }
 function renderDeskCards() {
@@ -214,9 +215,29 @@ function renderPriceCharts() {
   });
 }
 
+function renderMarketTape() {
+  const assets = STATUS?.assets || ["BTC", "ETH"];
+  const items = assets.map((asset) => {
+    const points = PRICE_SERIES[asset] || [];
+    const last = points.at(-1);
+    const previous = points.at(-2);
+    const price = Number(last?.price);
+    const delta = Number.isFinite(price) && Number.isFinite(Number(previous?.price)) ? price - Number(previous.price) : 0;
+    const active = WINDOWS.find((item) => item.window.asset === asset);
+    const lead = active?.predictions?.find(Boolean);
+    const direction = lead?.direction === "DOWN" ? "DOWN" : lead ? "UP" : "—";
+    return `<div class="tape-item"><span class="tape-symbol">${esc(asset)} <small>/ USD</small></span><b>${money(price)}</b><span class="${delta >= 0 ? "tape-up" : "tape-down"}">${delta >= 0 ? "+" : ""}${money(delta)}</span><span class="tape-signal ${direction === "UP" ? "tape-up" : direction === "DOWN" ? "tape-down" : ""}">${direction} desk signal</span></div>`;
+  }).join("");
+  const activeCount = WINDOWS.length;
+  const mode = STATUS?.paper ? "PAPER" : STATUS?.live ? "LIVE TESTNET" : "OFFLINE";
+  const tape = $("#market-tape");
+  if (tape) tape.innerHTML = `${items}<div class="tape-status"><span class="health-dot"></span>${activeCount} active window${activeCount === 1 ? "" : "s"} <b>${mode}</b></div>`;
+}
+
 function renderOverview() {
   const trades = TRADES.filter((t) => t.status !== "failed"), liveWindows = WINDOWS.length, followedCount = followed.size;
-  $("#page-content").innerHTML = `<div class="page-intro"><div><span class="section-kicker">LIVE DESK NETWORK</span><h2>Good morning, operator.</h2><p>Watch the market, understand the signal, and choose when to act.</p></div><div class="page-actions"><a class="section-link" href="#/app/agents">Compare desks →</a><a class="section-link" href="#/app/system">System status</a></div></div>
+  renderMarketTape();
+  $("#page-content").innerHTML = `<div class="page-intro"><div><span class="section-kicker">AGENT TRADING TERMINAL</span><h2>Read the desks. Trade the edge.</h2><p>Binance-style market context for autonomous event-contract agents. Every call is public; every order stays under your control.</p></div><div class="page-actions"><a class="section-link" href="#/app/agents">Compare desks →</a><a class="section-link" href="#/app/system">System status</a></div></div>
     <div class="metric-grid"><div class="metric-card"><small>Active windows</small><b>${liveWindows.toString().padStart(2, "0")}</b><div class="trend">BTC + ETH monitored</div></div><div class="metric-card"><small>Desks online</small><b>${STATUS?.agents?.length || 5}</b><div class="trend">All systems operational</div></div><div class="metric-card"><small>Following</small><b>${followedCount.toString().padStart(2, "0")}</b><div class="trend"><a href="#/app/account">Manage watchlist →</a></div></div><div class="metric-card"><small>Network trades</small><b>${trades.length}</b><div class="trend">Public activity log</div></div></div>
     <section class="panel"><div class="panel-heading"><div><span class="section-kicker">MARKET PULSE</span><h2>What the market is asking</h2><p class="panel-subtitle">The event resolves against the oracle price at expiry.</p></div><span class="tiny-live">UPDATING LIVE</span></div><div class="windows">${renderWindowCards()}</div></section>
     <section class="panel price-panel"><div class="panel-heading"><div><span class="section-kicker">ORACLE PRICES</span><h2>Where the market is now</h2><p class="panel-subtitle">Live Somnia price feed, shown in dollars.</p></div><span class="heading-note">Streaming live data</span></div><div class="price-chart-grid">${(STATUS?.assets || ["BTC", "ETH"]).map((asset) => { const last = PRICE_SERIES[asset]?.at(-1); return `<div class="price-chart-card"><div class="price-chart-heading"><span>${esc(asset)} / USD</span><b>${money(last?.price)}</b></div><canvas data-price-chart="${esc(asset)}" height="150"></canvas><div class="chart-caption">Recent oracle ticks · ${last ? `${ago(last.t * 1000)} ago` : "waiting for ticks"}</div></div>`; }).join("")}</div></section>
@@ -277,6 +298,7 @@ async function renderAccount() {
 function renderCurrent() {
   if (location.hash === "" || location.hash === "#/" || !location.hash.startsWith("#/app")) { $("#landing-view").classList.remove("hidden"); $("#app-view").classList.add("hidden"); return; }
   $("#landing-view").classList.add("hidden"); $("#app-view").classList.remove("hidden");
+  renderMarketTape();
   const match = location.hash.match(/^#\/app\/agents\/([a-z0-9-]+)/i); const page = location.hash.match(/^#\/app\/(overview|agents|system|account)/i)?.[1] || "overview";
   document.querySelectorAll(".side-nav a").forEach((a) => a.classList.toggle("active", a.dataset.route === (match ? "agents" : page)));
   if (match) { renderAgentDetail(match[1]); return; }

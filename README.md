@@ -29,7 +29,7 @@ Signals come from the on-chain BTC/ETH index feed exposed by
 
 ```bash
 npm install
-npm start          # paper mode, http://localhost:12000
+npm start          # paper mode, http://localhost:5000
 ```
 
 ### Going live (testnet)
@@ -95,6 +95,19 @@ React to the dashboards or embed the endpoints in a product of your own.
   indexer + `wss://api.infra.testnet.somnia.network/ws`)
 - Express + SSE, no build step for the frontend (vanilla JS + canvas chart)
 - State is append-only JSON persisted at `data/state.json`
+
+### DreamDEX Bot Kit alignment
+
+The official [dreamdex-bot-kit](https://github.com/somnia-chain/dreamdex-bot-kit) currently
+separates spot bots (`@dreamdex-bot-kit/core`) from event-contract bots
+(`@dreamdex-bot-kit/ec-core`). The event-contract package is a private workspace package and
+is intentionally built on the same `@somnia-chain/markets-sdk` used here, so AgentDesk keeps
+its existing event-contract adapter rather than adding an incompatible spot-bot dependency.
+
+The dashboard follows the kit's safer operator patterns: live market status is visible before
+execution, bid/ask and fill mode are shown in the copy ticket, and live testnet execution
+remains explicitly labeled. A future migration can replace the adapter internals with
+`ec-core` once that package is published or vendored, without changing the agent or UI APIs.
 
 ### Scripts
 

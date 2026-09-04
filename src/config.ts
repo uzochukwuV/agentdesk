@@ -18,7 +18,7 @@ if (existsSync(".env")) {
 }
 
 export const config = {
-  port: envNum(process.env.PORT, 12000),
+  port: envNum(process.env.PORT, 5000),
   host: process.env.HOST ?? "0.0.0.0",
 
   network: (process.env.DREAMDEX_NETWORK ?? "testnet") as "testnet" | "mainnet",

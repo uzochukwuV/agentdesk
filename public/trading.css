@@ -1,0 +1,12 @@
+.market-tape{display:flex;align-items:stretch;min-height:54px;padding:0 28px;border-bottom:1px solid var(--line);background:rgba(13,15,23,.96);overflow:auto;scrollbar-width:none}
+.market-tape::-webkit-scrollbar{display:none}
+.tape-item{display:flex;align-items:center;gap:12px;min-width:225px;padding:0 22px;border-right:1px solid var(--line);font:10px var(--mono);white-space:nowrap}
+.tape-symbol{color:var(--text);font-weight:500;letter-spacing:.6px}.tape-symbol small{color:var(--muted);font-weight:400}.tape-item>b{font-size:12px;color:var(--text)}
+.tape-up{color:var(--lime)!important}.tape-down{color:var(--red)!important}.tape-signal{color:var(--muted);margin-left:auto;font-size:9px}
+.tape-status{display:flex;align-items:center;gap:7px;padding:0 20px;color:var(--muted);font:9px var(--mono);letter-spacing:.4px;white-space:nowrap}.tape-status .health-dot{margin:0;width:5px;height:5px}.tape-status b{color:var(--lime);font-weight:500;margin-left:5px}
+.quote-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;margin:16px 0 14px;background:var(--line);border:1px solid var(--line)}
+.quote-strip div{display:flex;flex-direction:column;gap:5px;padding:9px 10px;background:rgba(23,25,35,.72)}.quote-strip small{color:var(--muted);font:9px var(--mono);letter-spacing:.5px}.quote-strip b{font:500 12px var(--mono);color:var(--text)}
+.window-card .pred-strip{margin-top:0}.window-card .window-actions{border-top:1px solid var(--line);padding-top:14px}.window-card .trade-button{font-size:10px}
+.page-intro h2{max-width:680px}.page-intro p{max-width:680px}.metric-card{position:relative;overflow:hidden}.metric-card:after{content:"";position:absolute;right:-28px;bottom:-42px;width:110px;height:110px;border:1px solid rgba(201,243,106,.11);border-radius:50%}.metric-card b{position:relative;z-index:1}
+.window-card{background:linear-gradient(145deg,rgba(20,23,32,.96),rgba(13,15,22,.96))}.window-card:hover{border-color:rgba(201,243,106,.45);box-shadow:0 12px 34px rgba(0,0,0,.18)}.desk-card{transition:border-color .2s,transform .2s}.desk-card:hover{border-color:rgba(201,243,106,.35);transform:translateY(-2px)}
+@media(max-width:760px){.market-tape{padding:0 8px}.tape-item{min-width:205px;padding:0 14px}.tape-status{padding:0 14px}.quote-strip{grid-template-columns:repeat(2,1fr)}}
