@@ -162,6 +162,15 @@ app.get("/api/active", (_req, res) => {
   );
   res.json(out);
 });
+app.get("/api/orderbook", async (req, res) => {
+  try {
+    const marketId = String(req.query.marketId ?? "");
+    if (!marketId) return res.status(400).json({ error: "marketId is required" });
+    res.json(await engine.orderBook(marketId));
+  } catch (e: any) {
+    res.status(400).json({ error: String(e?.shortMessage ?? e?.message ?? e).slice(0, 300) });
+  }
+});
 app.get("/api/prices/:asset", (req, res) => {
   res.json(engine.priceHistory(String(req.params.asset).toUpperCase()));
 });

@@ -157,6 +157,12 @@ export class Engine {
     return this.readExchange.previewUserOrder(win, side, contracts);
   }
 
+  async orderBook(marketId: string) {
+    const win = [...this.windows.values()].find((candidate) => candidate?.marketId === marketId) ?? null;
+    if (!win || win.expiry <= Date.now() / 1000) throw new Error("market is no longer active");
+    return this.readExchange.getOrderBookDepth(win);
+  }
+
   async start(): Promise<void> {
     if (this.started) return;
     this.started = true;

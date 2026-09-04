@@ -1,5 +1,5 @@
 const $ = (s) => document.querySelector(s);
-let STATUS = null, WINDOWS = [], LEADER = [], EQUITY = [], PREDS = [], TRADES = [], PRICE_SERIES = {};
+let STATUS = null, WINDOWS = [], ORDERBOOKS = {}, LEADER = [], EQUITY = [], PREDS = [], TRADES = [], PRICE_SERIES = {};
 let walletAddress = localStorage.getItem("agentdesk.wallet") || null;
 let activeTrade = { marketId: null, symbol: "", side: "YES", agent: "" };
 let tradePreview = null, previewSeq = 0, previewTimer = null;
@@ -150,7 +150,10 @@ function renderWindowCards() {
     const current = w.currentPrice ?? lead?.sourcePriceAtSignal;
     const question = w.question || `Will ${w.asset} be above the market strike at expiry?`;
     const bid = lead?.bookYes?.bid, ask = lead?.bookYes?.ask;
-    return `<article class="window-card"><div class="head"><span class="sym">${esc(w.asset)} event</span><span class="count" data-expiry="${w.expiry}">${countdown(w.expiry)}</span></div><div class="event-question"><span>QUESTION</span><b>${esc(question)}</b></div><div class="window-meta">${esc(w.symbol)} · ${esc(w.statusName || "TRADING")} · closes in ${countdown(w.expiry)}</div><div class="event-facts"><span>Current ${esc(w.asset)} <b>${money(current)}</b></span><span>YES probability <b>${fmt(lead?.bookYes?.mid, 3)}</b></span></div><div class="quote-strip"><div><small>YES BID</small><b>${fmt(bid, 3)}</b></div><div><small>YES ASK</small><b>${fmt(ask, 3)}</b></div><div><small>SPREAD</small><b>${bid != null && ask != null ? fmt(ask - bid, 3) : "—"}</b></div><div><small>MODE</small><b>${lead?.decision === "trade" ? "IOC" : "WATCH"}</b></div></div><div class="pred-strip">${chips || '<span class="heading-note">Waiting for desk quotes…</span>'}</div><div class="window-actions">${lead ? `<button class="trade-button" data-trade="${esc(w.marketId)}" data-symbol="${esc(w.symbol)}" data-side="${side}" data-agent="${esc(agent)}">Copy ${side} call →</button>` : ""}<a href="#/app/agents" class="follow-button">View desks</a></div></article>`;
+    const depth = ORDERBOOKS[w.marketId];
+    const depthRow = (row, tone = "") => row ? `<div class="depth-row ${tone}"><span>${fmt(row.price, 3)}</span><b>${fmt(row.quantity, 2)}</b></div>` : "";
+    const depthPanel = depth ? `<div class="depth-panel"><div class="depth-heading"><span>LIVE DEPTH</span><small>${depth.fetchedAt ? `${ago(depth.fetchedAt)} ago` : "streaming"}</small></div><div class="depth-columns"><div><div class="depth-side-title yes">YES / bids</div>${(depth.yesBids || []).slice(0, 5).map((row) => depthRow(row, "buy")).join("") || '<span class="depth-empty">No bids</span>'}</div><div><div class="depth-side-title no">YES / asks</div>${(depth.yesAsks || []).slice(0, 5).map((row) => depthRow(row, "sell")).join("") || '<span class="depth-empty">No asks</span>'}</div></div><div class="depth-legend"><span>price</span><span>contracts</span></div></div>` : '<div class="depth-panel depth-unavailable">Order-book depth unavailable — waiting for a live two-sided market.</div>';
+    return `<article class="window-card"><div class="head"><span class="sym">${esc(w.asset)} event</span><span class="count" data-expiry="${w.expiry}">${countdown(w.expiry)}</span></div><div class="event-question"><span>QUESTION</span><b>${esc(question)}</b></div><div class="window-meta">${esc(w.symbol)} · ${esc(w.statusName || "TRADING")} · closes in ${countdown(w.expiry)}</div><div class="event-facts"><span>Current ${esc(w.asset)} <b>${money(current)}</b></span><span>YES probability <b>${fmt(lead?.bookYes?.mid, 3)}</b></span></div><div class="quote-strip"><div><small>YES BID</small><b>${fmt(bid, 3)}</b></div><div><small>YES ASK</small><b>${fmt(ask, 3)}</b></div><div><small>SPREAD</small><b>${bid != null && ask != null ? fmt(ask - bid, 3) : "—"}</b></div><div><small>MODE</small><b>${lead?.decision === "trade" ? "IOC" : "WATCH"}</b></div></div>${depthPanel}<div class="pred-strip">${chips || '<span class="heading-note">Waiting for desk quotes…</span>'}</div><div class="window-actions">${lead ? `<button class="trade-button" data-trade="${esc(w.marketId)}" data-symbol="${esc(w.symbol)}" data-side="${side}" data-agent="${esc(agent)}">Copy ${side} call →</button>` : ""}<a href="#/app/agents" class="follow-button">View desks</a></div></article>`;
   }).join("");
 }
 function renderDeskCards() {
@@ -311,6 +314,11 @@ const eventSource = new EventSource("/api/stream"); ["prediction", "trade", "equ
 async function fetchAll() {
   try {
     [STATUS, WINDOWS, LEADER, PREDS, TRADES, EQUITY] = await Promise.all([fetch("/api/status").then((r) => r.json()), fetch("/api/active").then((r) => r.json()), fetch("/api/leaderboard").then((r) => r.json()), fetch("/api/predictions?limit=80").then((r) => r.json()), fetch("/api/trades?limit=80").then((r) => r.json()), fetch("/api/equity").then((r) => r.json())]);
+    const depthRows = await Promise.all(WINDOWS.map(async ({ window }) => {
+      try { return [window.marketId, await fetch(`/api/orderbook?marketId=${encodeURIComponent(window.marketId)}`).then((r) => r.ok ? r.json() : null)]; }
+      catch { return [window.marketId, null]; }
+    }));
+    ORDERBOOKS = Object.fromEntries(depthRows);
     const assets = STATUS?.assets || ["BTC", "ETH"];
     const priceRows = await Promise.all(assets.map(async (asset) => {
       try { return [asset, await fetch(`/api/prices/${encodeURIComponent(asset)}`).then((r) => r.json())]; }

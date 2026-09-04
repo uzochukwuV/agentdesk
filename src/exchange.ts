@@ -236,6 +236,26 @@ export class Exchange {
     };
   }
 
+  /** Return human-readable multi-level binary depth for the terminal UI. */
+  async getOrderBookDepth(win: WindowMarket, depth = 8) {
+    const book = await this.exchange.client.getBinaryOrderBook(win.pool, {
+      depth,
+      decimals: this.collateralDecimals,
+    });
+    const toHuman = (n: bigint) => Number(n) / 10 ** this.collateralDecimals;
+    const levels = (rows: Array<{ price: bigint; quantity: bigint }> | undefined) =>
+      (rows ?? []).map((row) => ({ price: toHuman(row.price), quantity: toHuman(row.quantity) }));
+    return {
+      marketId: win.marketId,
+      symbol: win.symbol,
+      fetchedAt: Date.now(),
+      yesBids: levels(book.yesBids),
+      yesAsks: levels(book.yesAsks),
+      noBids: levels(book.noBids),
+      noAsks: levels(book.noAsks),
+    };
+  }
+
   /** Read a connected wallet's binary positions and settled redeemable claims. */
   async getUserPortfolio(account: Address) {
     const [positions, claimable, collateral, native] = await Promise.all([
