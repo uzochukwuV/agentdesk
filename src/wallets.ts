@@ -23,14 +23,14 @@ export function resolveWallets(agentIds: string[]): Map<string, WalletInfo> {
   const out = new Map<string, WalletInfo>();
   const legacy = (process.env.PRIVATE_KEY ?? "").trim();
   const dir = join(process.cwd(), config.dataDir);
-  const file = join(dir, "agentWallets.json");
+  const file = join(dir, config.agentWalletFile);
   mkdirSync(dir, { recursive: true });
   let saved: WalletFile = { wallets: [] };
   if (existsSync(file)) {
     try {
       saved = JSON.parse(readFileSync(file, "utf8"));
     } catch (e) {
-      console.error("[wallets] failed to parse agentWallets.json, regenerating", e);
+      console.error(`[wallets] failed to parse ${config.agentWalletFile}, regenerating`, e);
     }
   }
   let changed = false;

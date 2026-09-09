@@ -61,6 +61,7 @@ export const config = {
 
   // Persistence
   dataDir: process.env.DATA_DIR ?? "data",
+  agentWalletFile: process.env.AGENT_WALLETS_FILE ?? "Agentwallet.json",
 
   // Auto faucet on startup in live mode when collateral is low.
   autoFaucet: envBool(process.env.AUTO_FAUCET, true),

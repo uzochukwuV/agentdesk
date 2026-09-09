@@ -211,19 +211,50 @@ export class Exchange {
       oneCollateral,
     );
     const toHuman = (n: bigint) => Number(n) / 10 ** this.collateralDecimals;
+    const quotedContracts = toHuman(quantity);
+    const filledContracts = toHuman(quote.filledQuantity);
+    const fillRatio = quotedContracts > 0 ? filledContracts / quotedContracts : 0;
+    const yesBid = book.yesBids[0] ? toHuman(book.yesBids[0].price) : null;
+    const yesAsk = book.yesAsks[0] ? toHuman(book.yesAsks[0].price) : null;
+    const spread = yesBid != null && yesAsk != null ? yesAsk - yesBid : null;
+    const slippage = toHuman(quote.slippageVsMid);
+    const secondsLeft = Math.max(0, win.expiry - Date.now() / 1000);
+    const fillScore = Math.min(1, fillRatio);
+    const spreadScore = spread == null ? 0 : Math.max(0, Math.min(1, 1 - spread / 0.1));
+    const slippageScore = Math.max(0, Math.min(1, 1 - Math.abs(slippage) / 0.08));
+    const timeScore = Math.max(0, Math.min(1, secondsLeft / 180));
+    const safetyScore = Math.round(100 * (fillScore * 0.3 + spreadScore * 0.25 + slippageScore * 0.25 + timeScore * 0.2));
+    const warnings: string[] = [];
+    if (fillRatio < 0.999) warnings.push(`${toHuman(quote.wouldRest)} contracts may not fill`);
+    if (spread != null && spread > 0.04) warnings.push(`wide YES spread ${(spread * 100).toFixed(1)} points`);
+    if (Math.abs(slippage) > 0.02) warnings.push(`estimated price impact ${(Math.abs(slippage) * 100).toFixed(1)} points`);
+    if (secondsLeft < 90) warnings.push(`only ${Math.round(secondsLeft)} seconds until expiry`);
+    const riskLabel = safetyScore >= 75 ? "HEALTHY" : safetyScore >= 50 ? "CAUTION" : "THIN";
     return {
       side,
       requestedContracts: contractsHuman,
-      quotedContracts: toHuman(quantity),
+      quotedContracts,
       avgPrice: toHuman(quote.avgPrice),
       costCollateral: toHuman(quote.cost),
-      filledContracts: toHuman(quote.filledQuantity),
+      filledContracts,
       wouldRestContracts: toHuman(quote.wouldRest),
       levelsConsumed: quote.levelsConsumed,
-      slippageVsMid: toHuman(quote.slippageVsMid),
+      slippageVsMid: slippage,
+      fetchedAt: Date.now(),
+      risk: {
+        score: safetyScore,
+        label: riskLabel,
+        fillRatio,
+        spread,
+        maxLossCollateral: toHuman(quote.cost),
+        maxPayoutCollateral: filledContracts,
+        maxProfitCollateral: filledContracts - toHuman(quote.cost),
+        secondsLeft,
+        warnings,
+      },
       book: {
-        yesBid: book.yesBids[0] ? { price: toHuman(book.yesBids[0].price), quantity: toHuman(book.yesBids[0].quantity) } : null,
-        yesAsk: book.yesAsks[0] ? { price: toHuman(book.yesAsks[0].price), quantity: toHuman(book.yesAsks[0].quantity) } : null,
+        yesBid: book.yesBids[0] ? { price: yesBid, quantity: toHuman(book.yesBids[0].quantity) } : null,
+        yesAsk: book.yesAsks[0] ? { price: yesAsk, quantity: toHuman(book.yesAsks[0].quantity) } : null,
         noBid: book.noBids[0] ? { price: toHuman(book.noBids[0].price), quantity: toHuman(book.noBids[0].quantity) } : null,
         noAsk: book.noAsks[0] ? { price: toHuman(book.noAsks[0].price), quantity: toHuman(book.noAsks[0].quantity) } : null,
       },

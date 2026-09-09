@@ -4,7 +4,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { createPublicClient, createWalletClient, http, parseAbi } from "viem";
 import { somniaShannon } from "@somnia-chain/markets-sdk/chains";
 
-const { wallets } = JSON.parse(readFileSync(join(process.cwd(), "data/agentWallets.json"), "utf8"));
+const { wallets } = JSON.parse(readFileSync(join(process.cwd(), "data", process.env.AGENT_WALLETS_FILE ?? "Agentwallet.json"), "utf8"));
 const w = wallets.find((x: any) => x.agentId === (process.argv[2] ?? "meanrev"));
 const account = privateKeyToAccount(w.privateKey as `0x${string}`);
 const rpc = "https://api.infra.testnet.somnia.network";

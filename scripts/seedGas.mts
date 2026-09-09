@@ -5,7 +5,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { createPublicClient, createWalletClient, http, parseEther, formatEther } from "viem";
 import { somniaShannon } from "@somnia-chain/markets-sdk/chains";
 
-const file = join(process.cwd(), "data/agentWallets.json");
+const file = join(process.cwd(), "data", process.env.AGENT_WALLETS_FILE ?? "Agentwallet.json");
 const { wallets } = JSON.parse(readFileSync(file, "utf8")) as { wallets: { agentId: string; privateKey: string; address: string }[] };
 
 const fromId = process.argv[2] ?? "meanrev";

@@ -34,8 +34,8 @@ npm start          # paper mode, http://localhost:5000
 
 ### Going live (testnet)
 
-`PAPER_TRADES=false` plus either `PRIVATE_KEY` in `.env` or a wallet the tool
-autogenerates into `data/wallet.json` (gitignored). The wallet needs:
+`PAPER_TRADES=false` plus either `PRIVATE_KEY` in `.env` or the per-agent wallets
+persisted in `data/Agentwallet.json` (gitignored). The wallets need:
 
 - **gas**: a bit of STT (Somnia Shannon test token — any public faucet, e.g.
   Google Cloud / thirdweb / Discord DevRel)
@@ -49,7 +49,7 @@ settlement at expiry, and (for winners) an on-chain redeem whose tx is linked to
 
 | Env | Default | Meaning |
 |-----|---------|---------|
-| `PORT` | `12000` | HTTP port |
+| `PORT` | `5000` | HTTP port |
 | `PAPER_TRADES` | `true` | `false` + a key → live testnet fills |
 | `PRIVATE_KEY` | — | EVM signing key, else generated to `data/wallet.json` |
 | `DREAMDEX_NETWORK` | `testnet` | `mainnet` for production collateral |
@@ -60,6 +60,7 @@ settlement at expiry, and (for winners) an on-chain redeem whose tx is linked to
 | `SCAN_INTERVAL_MS` | `5000` | Engine loop cadence |
 | `AUTO_FAUCET` | `true` | Mint tUSDC when live collateral is low |
 | `DATA_DIR` | `data` | Persisted state (gitignored) |
+| `AGENT_WALLETS_FILE` | `Agentwallet.json` | Wallet file name inside `DATA_DIR` |
 
 ### API
 
@@ -74,6 +75,19 @@ settlement at expiry, and (for winners) an on-chain redeem whose tx is linked to
 - `GET /api/stream` — SSE that pushes prediction/trade/equity events
 
 React to the dashboards or embed the endpoints in a product of your own.
+
+### User wallets and following desks
+
+Users connect MetaMask or another injected wallet from **My account**, choose any of the
+five desks, and follow/unfollow it from the strategy picker. Following is currently stored
+in that browser's local storage; it does not grant the app access to the user's private key.
+Copy trading prepares an unsigned transaction and the connected wallet signs it.
+
+The autonomous desks are separate: they sign from the dedicated per-agent wallets in
+`data/Agentwallet.json`. Keep those keys server-side, fund only the amount intended for
+automation, and do not reuse a personal wallet. `PAPER_TRADES=false` with
+`ENABLE_LIVE_TRADING=true` enables live testnet execution once the wallets have native gas
+and the next eligible market window has a two-sided book.
 
 ### How a call becomes a track record
 
@@ -108,6 +122,23 @@ The dashboard follows the kit's safer operator patterns: live market status is v
 execution, bid/ask and fill mode are shown in the copy ticket, and live testnet execution
 remains explicitly labeled. A future migration can replace the adapter internals with
 `ec-core` once that package is published or vendored, without changing the agent or UI APIs.
+
+### Why AgentDesk is different
+
+AgentDesk combines three layers that are usually presented separately:
+
+- **Decision receipts**: every desk call exposes its model probability, market-implied YES
+  mid, model edge, source price, rationale, and numeric features.
+- **Execution safety**: before a user signs, the quote walks the live book and scores fill
+  ratio, spread, price impact, and time to expiry. The ticket also shows estimated maximum
+  loss and explicit warnings for thin or stale conditions.
+- **Public accountability**: the call is published before resolution, the desk identity is
+  public, and outcomes are graded from settled event contracts rather than from a private
+  backtest or an opaque AI explanation.
+
+That makes the product more than an agent arena or a copy-trading button: it is an
+inspectable decision-to-execution pipeline where the user can see both *why* a desk acted
+and *whether the market can safely fill the action*.
 
 ### Scripts
 
