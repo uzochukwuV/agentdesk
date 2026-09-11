@@ -1,0 +1,29 @@
+{
+  "wallets": [
+    {
+      "agentId": "momentum",
+      "privateKey": "0xf8aaebb90d9982b4fd949e923d5d164a28feb07f15393bc6d4c26d250fd3ea73",
+      "address": "0xE3bBefcE9f7A5f40C3D4FF4De2395B7959CbAe0f"
+    },
+    {
+      "agentId": "meanrev",
+      "privateKey": "0x741b46dd996b6159e30695d77e0bd5e447136104764fd5ea417b44e84601824d",
+      "address": "0xe22D8Ae2DBa3b180A8380a364271a6B47b6c27E8"
+    },
+    {
+      "agentId": "mispricing",
+      "privateKey": "0xf82fc85e768919afd9bee63e856105fb7ad616b70f4317387ae889b84d9f9f66",
+      "address": "0x5578AA1D5AC438997b503C85556db61F261be167"
+    },
+    {
+      "agentId": "breakout",
+      "privateKey": "0x8360610d3287341575fb05eb5b6667ea505de708cf5dad8fe3c1a6eb98ba41c9",
+      "address": "0x79fE0d5b01A9B9182f5464487A4d9b75609707dF"
+    },
+    {
+      "agentId": "quorum",
+      "privateKey": "0xd2a6fc6fb76e1209d79cb8c2e5736127f8f7ac13f642146bae3fa48c534a7d7d",
+      "address": "0x6Fd5b4832D3438Ce96fDa24728Ab8D624E8b6eB5"
+    }
+  ]
+}
